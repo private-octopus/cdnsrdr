@@ -36,3 +36,4 @@ script:
       fi
   - make -j 4
   - ./cdnstest
+  - if $VALGRIND ; then valgrind -v --error-exitcode=1 ./ithitest ; fi
