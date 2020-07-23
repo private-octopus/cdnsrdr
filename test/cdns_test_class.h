@@ -24,9 +24,11 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#ifdef _cplusplus
 #if _cplusplus < 199711L
 #ifndef override
 #define override 
+#endif
 #endif
 #endif
 
