@@ -3,3 +3,12 @@
 ################################################################################
 
 /.vs/cdnsrdr/v16
+/x64/Debug
+*.user
+/Debug/cdnsrdr.tlog
+/Debug
+/Release
+/x64/Release
+/cdnstestapp/Debug
+/cdnstestapp/Release
+/cdnstestapp/x64
