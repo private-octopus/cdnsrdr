@@ -105,11 +105,9 @@ void CdnsTest::NamePrint(uint8_t* q_name, size_t q_name_length, FILE* F)
 }
 
 void CdnsTest::SubmitQuery(cdns* cdns_ctx, size_t query_index, FILE * F)
-{
-    bool ret = true;
+{\
     cdns_query* query = &cdns_ctx->block.queries[query_index];
     cdns_query_signature* q_sig = NULL;
-    size_t c_address_id = (size_t)query->client_address_index - CNDS_INDEX_OFFSET;
 
     if (query->query_signature_index >= CNDS_INDEX_OFFSET) {
         q_sig = &cdns_ctx->block.tables.q_sigs[(size_t)query->query_signature_index - CNDS_INDEX_OFFSET];
@@ -234,7 +232,7 @@ bool CdnsTest::DoTest()
             ret = false;
         }
         else {
-            fprintf(F_out, "Block start: %d.%06d\n",
+            fprintf(F_out, "Block start: %ld.%06ld\n",
                 cdns_ctx.block.preamble.earliest_time_sec, cdns_ctx.block.preamble.earliest_time_usec);
             while (ret) {
                 nb_calls++;
