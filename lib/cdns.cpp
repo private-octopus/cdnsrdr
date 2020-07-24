@@ -53,7 +53,7 @@ cdns::~cdns()
     }
 }
 
-static FILE * cnds_file_open(char const* file_name, char const* flags)
+FILE * cnds_file_open(char const* file_name, char const* flags)
 {
     FILE* F;
 

@@ -21,7 +21,7 @@
 
 #ifndef CDNS_TEST_H
 #define CDNS_TEST_H
-
+#include "cdns.h"
 #include "cdns_test_class.h"
 
 class CdnsTest : public cdns_test_class
@@ -29,6 +29,12 @@ class CdnsTest : public cdns_test_class
 public:
     CdnsTest();
     ~CdnsTest();
+
+    static void NamePrint(uint8_t* q_name, size_t q_name_length, FILE* F);
+
+    static void SubmitQuery(cdns* cdns_ctx, size_t query_index, FILE* F);
+
+    static bool FileCompare(char const* file_out, char const* file_ref);
 
     bool DoTest() override;
 };
