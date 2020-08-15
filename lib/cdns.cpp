@@ -93,6 +93,7 @@ bool cdns::dump(char const* file_out)
     size_t out_size = 10 * buf_size;
     char* out_buf = new char[out_size];
     bool ret = (F_out != NULL && out_buf != NULL);
+    int cdns_version = 0;
 
     if (ret) {
         int err = 0;
@@ -132,7 +133,7 @@ bool cdns::dump(char const* file_out)
                 p_out = out_buf;
                 in = cbor_to_text(in, in_max, &p_out, out_buf + out_size, &err);
                 fprintf(F_out, "-- File preamble\n    %s\n", out_buf);*/
-                in = dump_preamble(in, in_max, out_buf, out_buf + out_size, & err, F_out);
+                in = dump_preamble(in, in_max, out_buf, out_buf + out_size, & cdns_version, & err, F_out);
                 fprintf(F_out, ",\n");
                 val--;
             }
@@ -361,7 +362,7 @@ bool cdns::read_preamble(int * err)
     return ret;
 }
 
-uint8_t* cdns::dump_preamble(uint8_t* in, uint8_t* in_max, char* out_buf, char* out_max, int* err, FILE* F_out)
+uint8_t* cdns::dump_preamble(uint8_t* in, uint8_t* in_max, char* out_buf, char* out_max, int* cdns_version, int* err, FILE* F_out)
 {
     char* p_out;
     int64_t val;
@@ -415,7 +416,15 @@ uint8_t* cdns::dump_preamble(uint8_t* in, uint8_t* in_max, char* out_buf, char* 
                     }
                     rank++;
                     if (inner_val == 0) {
+                        int inner_type = CBOR_CLASS(*in);
+                        if (inner_type == CBOR_T_UINT) {
+                            int64_t inner_val = 0;
+                            (void)cbor_get_number(in, in_max, &inner_val);
+                            *cdns_version = (int) inner_val;
+                        }
+
                         fprintf(F_out, "        --major-format-version\n");
+
                     }else if (inner_val == 1) {
                         fprintf(F_out, "        --minor-format-version\n");
                     }
@@ -423,7 +432,7 @@ uint8_t* cdns::dump_preamble(uint8_t* in, uint8_t* in_max, char* out_buf, char* 
                         fprintf(F_out, "        --private-version\n");
                     }
                     else if (inner_val == 3) {
-                        fprintf(F_out, "        --block-parameters\n");
+                        fprintf(F_out, "        --block-parameters (version %d)\n", *cdns_version);
                     }
                     else if (inner_val == 4) {
                         fprintf(F_out, "        --generator-id\n"); /* V0.5 only? */
@@ -433,7 +442,7 @@ uint8_t* cdns::dump_preamble(uint8_t* in, uint8_t* in_max, char* out_buf, char* 
                     }
                     fprintf(F_out, "        %d, ", (int)inner_val);
                     if (inner_val == 3) {
-                        in = dump_block_parameters(in, in_max, out_buf, out_max, err, F_out);
+                        in = dump_block_parameters(in, in_max, out_buf, out_max, *cdns_version, err, F_out);
                     }
                     else {
                         p_out = out_buf;
@@ -453,7 +462,7 @@ uint8_t* cdns::dump_preamble(uint8_t* in, uint8_t* in_max, char* out_buf, char* 
     return in;
 }
 
-uint8_t* cdns::dump_block_parameters(uint8_t* in, uint8_t* in_max, char* out_buf, char* out_max, int* err, FILE* F_out)
+uint8_t* cdns::dump_block_parameters(uint8_t* in, uint8_t* in_max, char* out_buf, char* out_max, int cdns_version, int* err, FILE* F_out)
 {
     char* p_out;
     int64_t val;
@@ -462,7 +471,7 @@ uint8_t* cdns::dump_block_parameters(uint8_t* in, uint8_t* in_max, char* out_buf
 
     in = cbor_get_number(in, in_max, &val);
 
-    if (in != NULL && outer_type == CBOR_T_MAP) {
+    if (in != NULL && outer_type == CBOR_T_MAP && cdns_version == 0) {
         /* Input is in draft-04 format */
         int rank = 0;
         fprintf(F_out, "[\n");
@@ -556,7 +565,7 @@ uint8_t* cdns::dump_block_parameters(uint8_t* in, uint8_t* in_max, char* out_buf
             fprintf(F_out, "\n        ]");
         }
     }
-    else if (in != NULL && outer_type == CBOR_T_ARRAY) {
+    else if (in != NULL && outer_type == CBOR_T_ARRAY && cdns_version == 1) {
         /* Block parameter in Array format */
         int rank = 0;
 
@@ -590,11 +599,11 @@ uint8_t* cdns::dump_block_parameters(uint8_t* in, uint8_t* in_max, char* out_buf
         }
 
         if (in != NULL) {
-            fprintf(F_out, "\n        ]\n");
+            fprintf(F_out, "\n        ]");
         }
     }
     else {
-        fprintf(F_out, "       Error, cannot parse the first bytes of block parameters, type %d.\n", outer_type);
+        fprintf(F_out, "       Error, cannot parse the first bytes of block parameters (version %d), type %d.\n", cdns_version, outer_type);
         *err = CBOR_MALFORMED_VALUE;
         in = NULL;
     }
