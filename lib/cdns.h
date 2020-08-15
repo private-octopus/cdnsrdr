@@ -39,8 +39,8 @@ public:
     long earliest_time_sec;
     long earliest_time_usec;
     bool is_filled;
-    int major;
-    int minor;
+    int v_major;
+    int v_minor;
 };
 
 class cdns_block_statistics

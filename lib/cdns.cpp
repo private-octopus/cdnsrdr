@@ -2235,8 +2235,8 @@ cdns_block_preamble::cdns_block_preamble():
     earliest_time_sec(0), 
     earliest_time_usec(0),
     is_filled(false),
-    major(0),
-    minor(0)
+    v_major(0),
+    v_minor(0)
 {
 }
 
@@ -2291,8 +2291,8 @@ void cdns_block_preamble::clear()
 {
     earliest_time_sec = 0;
     earliest_time_usec = 0;
-    major = 0;
-    minor = 0;
+    v_major = 0;
+    v_minor = 0;
     is_filled = false;
 }
 
