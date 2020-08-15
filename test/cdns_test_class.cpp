@@ -12,6 +12,7 @@ enum test_list_enum {
     test_enum_cbor_skip,
     test_enum_cdns,
     test_enum_cdns_dump,
+    test_enum_cdns_rfc_dump,
     test_enum_max_number
 };
 
@@ -39,6 +40,8 @@ char const * cdns_test_class::GetTestName(int number)
         return("cdns");
     case test_enum_cdns_dump:
         return("cdns_dump");
+    case test_enum_cdns_rfc_dump:
+        return("cdns_rfc_dump");
     default:
         break;
     }
@@ -77,6 +80,9 @@ cdns_test_class * cdns_test_class::TestByNumber(int number)
         break;
     case test_enum_cdns_dump:
         test = new CdnsDumpTest();
+        break;
+    case test_enum_cdns_rfc_dump:
+        test = new CdnsRfcDumpTest();
         break;
     default:
         break;

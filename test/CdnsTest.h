@@ -48,4 +48,14 @@ public:
     bool DoTest() override;
 };
 
+class CdnsRfcDumpTest : public cdns_test_class
+{
+public:
+    CdnsRfcDumpTest();
+    ~CdnsRfcDumpTest();
+
+    bool DoTest() override;
+};
+
+
 #endif

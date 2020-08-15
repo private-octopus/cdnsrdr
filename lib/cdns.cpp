@@ -462,12 +462,8 @@ uint8_t* cdns::dump_block_parameters(uint8_t* in, uint8_t* in_max, char* out_buf
 
     in = cbor_get_number(in, in_max, &val);
 
-    if (in == NULL || outer_type != CBOR_T_MAP) {
-        fprintf(F_out, "       Error, cannot parse the first bytes of block parameters, type %d.\n", outer_type);
-        *err = CBOR_MALFORMED_VALUE;
-        in = NULL;
-    }
-    else {
+    if (in != NULL && outer_type == CBOR_T_MAP) {
+        /* Input is in draft-04 format */
         int rank = 0;
         fprintf(F_out, "[\n");
         if (val == CBOR_END_OF_ARRAY) {
@@ -555,9 +551,279 @@ uint8_t* cdns::dump_block_parameters(uint8_t* in, uint8_t* in_max, char* out_buf
             }
         }
 
+
         if (in != NULL) {
             fprintf(F_out, "\n        ]");
         }
+    }
+    else if (in != NULL && outer_type == CBOR_T_ARRAY) {
+        /* Block parameter in Array format */
+        int rank = 0;
+
+        fprintf(F_out, " [\n");
+        if (val == CBOR_END_OF_ARRAY) {
+            is_undef = 1;
+            val = 0xffffffff;
+        }
+
+        while (val > 0 && in != NULL && in < in_max) {
+            if (*in == 0xff) {
+                fprintf(F_out, "        --end of array");
+                if (is_undef) {
+                    in++;
+                }
+                else {
+                    fprintf(F_out, "        Error, end of array mark unexpected.\n");
+                    *err = CBOR_MALFORMED_VALUE;
+                    in = NULL;
+                }
+                break;
+            }
+            else {
+                p_out = out_buf;
+                fprintf(F_out, "            -- Block parameter %d:\n", rank);
+                rank++;
+
+                in = dump_block_parameters_rfc(in, in_max, out_buf, out_max, err, F_out);
+                val--;
+            }
+        }
+
+        if (in != NULL) {
+            fprintf(F_out, "\n        ]\n");
+        }
+    }
+    else {
+        fprintf(F_out, "       Error, cannot parse the first bytes of block parameters, type %d.\n", outer_type);
+        *err = CBOR_MALFORMED_VALUE;
+        in = NULL;
+    }
+
+    return in;
+}
+
+uint8_t* cdns::dump_block_parameters_rfc(uint8_t* in, uint8_t* in_max, char* out_buf, char* out_max, int* err, FILE* F_out)
+{
+    char* p_out;
+    int64_t val;
+    int outer_type = CBOR_CLASS(*in);
+    int is_undef = 0;
+
+    in = cbor_get_number(in, in_max, &val);
+
+    if (in != NULL && outer_type == CBOR_T_MAP) {
+        /* Input is in draft-04 format */
+        int rank = 0;
+        fprintf(F_out, "            [\n");
+        if (val == CBOR_END_OF_ARRAY) {
+            is_undef = 1;
+            val = 0xffffffff;
+        }
+
+        while (val > 0 && in != NULL && in < in_max) {
+            if (*in == 0xff) {
+                fprintf(F_out, "\n            --end of array");
+                if (is_undef) {
+                    in++;
+                }
+                else {
+                    fprintf(F_out, "            Error, end of array mark unexpected.\n");
+                    *err = CBOR_MALFORMED_VALUE;
+                    in = NULL;
+                }
+                break;
+            }
+            else {
+                /* There should be two elements for each map item */
+                int inner_type = CBOR_CLASS(*in);
+                int64_t inner_val;
+
+                in = cbor_get_number(in, in_max, &inner_val);
+                if (inner_type != CBOR_T_UINT) {
+                    fprintf(F_out, "            Unexpected type: %d(%d)\n", inner_type, (int)inner_val);
+                    *err = CBOR_MALFORMED_VALUE;
+                    in = NULL;
+                }
+                else {
+                    if (rank != 0) {
+                        fprintf(F_out, ",\n");
+                    }
+                    rank++;
+                    {
+                        /* Type definitions copies from RFC */
+                        p_out = out_buf;
+                        if (inner_val == 0) {
+                            fprintf(F_out, "                --storage parameters\n                %d, ", (int)inner_val);
+                            in = dump_block_parameters_storage(in, in_max, out_buf, out_max, err, F_out);
+                        }
+                        else if (inner_val == 1) {
+                            fprintf(F_out, "                --collection parameters\n                %d, ", (int)inner_val);
+                            in = dump_block_parameters_collection(in, in_max, out_buf, out_max, err, F_out);
+                        }
+                        else {
+                            fprintf(F_out, "                --unexpected parameters\n");
+                            fprintf(F_out, "                %d,", (int)inner_val);
+                            in = cbor_to_text(in, in_max, &p_out, out_max, err);
+                            fwrite(out_buf, 1, p_out - out_buf, F_out);
+                        }
+                    }
+                    val--;
+                }
+            }
+        }
+
+
+        if (in != NULL) {
+            fprintf(F_out, "\n            ]");
+        }
+    }
+    else {
+        fprintf(F_out, "       Error, cannot parse the first bytes of block parameters (RFC), type %d.\n", outer_type);
+        *err = CBOR_MALFORMED_VALUE;
+        in = NULL;
+    }
+
+    return in;
+}
+
+
+uint8_t* cdns::dump_block_parameters_storage(uint8_t* in, uint8_t* in_max, char* out_buf, char* out_max, int* err, FILE* F_out)
+{
+    char* p_out;
+    int64_t val;
+    int outer_type = CBOR_CLASS(*in);
+    int is_undef = 0;
+
+    in = cbor_get_number(in, in_max, &val);
+
+    if (in != NULL && outer_type == CBOR_T_MAP) {
+        int rank = 0;
+        fprintf(F_out, "[\n");
+        if (val == CBOR_END_OF_ARRAY) {
+            is_undef = 1;
+            val = 0xffffffff;
+        }
+
+        while (val > 0 && in != NULL && in < in_max) {
+            if (*in == 0xff) {
+                if (is_undef) {
+                    in++;
+                }
+                else {
+                    fprintf(F_out, "                    Error, end of array mark unexpected.\n");
+                    *err = CBOR_MALFORMED_VALUE;
+                    in = NULL;
+                }
+                break;
+            }
+            else {
+                /* There should be two elements for each map item */
+                int inner_type = CBOR_CLASS(*in);
+                int64_t inner_val;
+
+                in = cbor_get_number(in, in_max, &inner_val);
+                if (inner_type != CBOR_T_UINT) {
+                    fprintf(F_out, "                    Unexpected type: %d(%d)\n", inner_type, (int)inner_val);
+                    *err = CBOR_MALFORMED_VALUE;
+                    in = NULL;
+                }
+                else {
+                    if (rank != 0) {
+                        fprintf(F_out, ",\n");
+                    }
+                    rank++;
+                    {
+                        /* Type definitions copies from RFC */
+                        p_out = out_buf;
+                        fprintf(F_out, "                    %d,", (int)inner_val);
+                        in = cbor_to_text(in, in_max, &p_out, out_max, err);
+                        fwrite(out_buf, 1, p_out - out_buf, F_out);
+                    }
+                    val--;
+                }
+            }
+        }
+
+
+        if (in != NULL) {
+            fprintf(F_out, "\n                ]");
+        }
+    }
+    else {
+        fprintf(F_out, "       Error, cannot parse the first bytes of storage parameters (RFC), type %d.\n", outer_type);
+        *err = CBOR_MALFORMED_VALUE;
+        in = NULL;
+    }
+
+    return in;
+}
+
+uint8_t* cdns::dump_block_parameters_collection(uint8_t* in, uint8_t* in_max, char* out_buf, char* out_max, int* err, FILE* F_out)
+{
+    char* p_out;
+    int64_t val;
+    int outer_type = CBOR_CLASS(*in);
+    int is_undef = 0;
+
+    in = cbor_get_number(in, in_max, &val);
+
+    if (in != NULL && outer_type == CBOR_T_MAP) {
+        int rank = 0;
+        fprintf(F_out, "[\n");
+        if (val == CBOR_END_OF_ARRAY) {
+            is_undef = 1;
+            val = 0xffffffff;
+        }
+
+        while (val > 0 && in != NULL && in < in_max) {
+            if (*in == 0xff) {
+                if (is_undef) {
+                    in++;
+                }
+                else {
+                    fprintf(F_out, "                Error, end of array mark unexpected.\n");
+                    *err = CBOR_MALFORMED_VALUE;
+                    in = NULL;
+                }
+                break;
+            }
+            else {
+                /* There should be two elements for each map item */
+                int inner_type = CBOR_CLASS(*in);
+                int64_t inner_val;
+
+                in = cbor_get_number(in, in_max, &inner_val);
+                if (inner_type != CBOR_T_UINT && inner_type != CBOR_T_NINT) {
+                    fprintf(F_out, "                Unexpected type: %d(%d)\n", inner_type, (int)inner_val);
+                    *err = CBOR_MALFORMED_VALUE;
+                    in = NULL;
+                }
+                else {
+                    if (rank != 0) {
+                        fprintf(F_out, ",\n");
+                    }
+                    rank++;
+                    if (inner_type == CBOR_T_NINT) {
+                        inner_val = -(inner_val + 1);
+                    }
+                    /* Type definitions copies from RFC */
+                    p_out = out_buf;
+                    fprintf(F_out, "                    %d,", (int)inner_val);
+                    in = cbor_to_text(in, in_max, &p_out, out_max, err);
+                    fwrite(out_buf, 1, p_out - out_buf, F_out);
+                    val--;
+                }
+            }
+        }
+
+        if (in != NULL) {
+            fprintf(F_out, "\n                ]");
+        }
+    }
+    else {
+        fprintf(F_out, "       Error, cannot parse the first bytes of collection parameters (RFC), type %d.\n", outer_type);
+        *err = CBOR_MALFORMED_VALUE;
+        in = NULL;
     }
 
     return in;
@@ -1968,7 +2234,9 @@ void cdns_block_statistics::clear()
 cdns_block_preamble::cdns_block_preamble():
     earliest_time_sec(0), 
     earliest_time_usec(0),
-    is_filled(false)
+    is_filled(false),
+    major(0),
+    minor(0)
 {
 }
 
@@ -2023,6 +2291,8 @@ void cdns_block_preamble::clear()
 {
     earliest_time_sec = 0;
     earliest_time_usec = 0;
+    major = 0;
+    minor = 0;
     is_filled = false;
 }
 

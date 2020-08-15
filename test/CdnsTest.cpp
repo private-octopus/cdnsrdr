@@ -31,16 +31,20 @@
 #ifdef _WINDOWS
 #ifndef _WINDOWS64
 static char const* cbor_in = "..\\test\\data\\cdns_test_file.cbor";
+static char const* cdns_in = "..\\test\\data\\cdns_test_file.cdns";
 static char const* text_ref = "..\\test\\data\\cdns_test_ref.txt";
 #else
 static char const* cbor_in = "..\\..\\test\\data\\cdns_test_file.cbor";
+static char const* cdns_in = "..\\..\\test\\data\\cdns_test_file.cdns";
 static char const* text_ref = "..\\..\\test\\data\\cdns_test_ref.txt";
 #endif
 #else
 static char const* cbor_in = "test/data/cdns_test_file.cbor";
+static char const* cdns_in = "test/data/cdns_test_file.cbor";
 static char const* text_ref = "test/data/cdns_test_ref.txt";
 #endif
 static char const* dump_out = "cdns_dump_file.txt";
+static char const* dump_rfc_out = "cdns_dump_rfc_file.txt";
 static char const* text_out = "cdns_test_file.txt";
 
 
@@ -105,7 +109,7 @@ void CdnsTest::NamePrint(uint8_t* q_name, size_t q_name_length, FILE* F)
 }
 
 void CdnsTest::SubmitQuery(cdns* cdns_ctx, size_t query_index, FILE * F)
-{\
+{
     cdns_query* query = &cdns_ctx->block.queries[query_index];
     cdns_query_signature* q_sig = NULL;
 
@@ -263,3 +267,25 @@ bool CdnsTest::DoTest()
 
     return ret;
 }
+
+
+CdnsRfcDumpTest::CdnsRfcDumpTest()
+{
+}
+
+CdnsRfcDumpTest::~CdnsRfcDumpTest()
+{
+}
+
+bool CdnsRfcDumpTest::DoTest()
+{
+    cdns cap_cbor;
+    bool ret = cap_cbor.open(cdns_in);
+
+    if (ret) {
+        ret = cap_cbor.dump(dump_rfc_out);
+    }
+
+    return ret;
+}
+
