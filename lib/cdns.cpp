@@ -141,7 +141,7 @@ bool cdns::dump(char const* file_out)
             while (val > 0 && in != NULL && in < in_max && *in != 0xff) {
                 rank++;
                 fprintf(F_out, "-- Block %d:\n", rank);
-                in = dump_block(in, in_max, out_buf, out_buf + out_size, &err, F_out);
+                in = dump_block(in, in_max, out_buf, out_buf + out_size, cdns_version, &err, F_out);
                 val--;
             }
 
@@ -838,7 +838,7 @@ uint8_t* cdns::dump_block_parameters_collection(uint8_t* in, uint8_t* in_max, ch
     return in;
 }
 
-uint8_t* cdns::dump_block(uint8_t* in, uint8_t* in_max, char* out_buf, char* out_max, int* err, FILE* F_out)
+uint8_t* cdns::dump_block(uint8_t* in, uint8_t* in_max, char* out_buf, char* out_max, int cdns_version, int* err, FILE* F_out)
 {
     char* p_out;
     int64_t val;
@@ -879,7 +879,7 @@ uint8_t* cdns::dump_block(uint8_t* in, uint8_t* in_max, char* out_buf, char* out
 
                 if (inner_type == CBOR_T_MAP) {
                     /* Records are held in a map */
-                    in = dump_block_properties(in, in_max, out_buf, out_max, err, F_out);
+                    in = dump_block_properties(in, in_max, out_buf, out_max, cdns_version, err, F_out);
                 }
                 else {
                     p_out = out_buf;
@@ -902,7 +902,7 @@ uint8_t* cdns::dump_block(uint8_t* in, uint8_t* in_max, char* out_buf, char* out
     return in;
 }
 
-uint8_t* cdns::dump_block_properties(uint8_t* in, uint8_t* in_max, char* out_buf, char* out_max, int* err, FILE* F_out)
+uint8_t* cdns::dump_block_properties(uint8_t* in, uint8_t* in_max, char* out_buf, char* out_max, int cdns_version, int* err, FILE* F_out)
 {
     char* p_out;
     int64_t val;
@@ -955,11 +955,11 @@ uint8_t* cdns::dump_block_properties(uint8_t* in, uint8_t* in_max, char* out_buf
                     rank++;
                     fprintf(F_out, "            %d, ", (int)inner_val);
                     if (inner_val == 2) {
-                        in = dump_block_tables(in, in_max, out_buf, out_max, err, F_out);
+                        in = dump_block_tables(in, in_max, out_buf, out_max, cdns_version, err, F_out);
                     }
                     else if (inner_val == 3) {
                         fprintf(F_out, "[\n");
-                        in = dump_queries(in, in_max, out_buf, out_max,  err, F_out);
+                        in = dump_queries(in, in_max, out_buf, out_max, cdns_version, err, F_out);
                         fprintf(F_out, "            ]");
                     }
                     else if (inner_val == 4) {
@@ -985,7 +985,7 @@ uint8_t* cdns::dump_block_properties(uint8_t* in, uint8_t* in_max, char* out_buf
     return in;
 }
 
-uint8_t* cdns::dump_block_tables(uint8_t* in, uint8_t* in_max, char* out_buf, char* out_max, int* err, FILE* F_out)
+uint8_t* cdns::dump_block_tables(uint8_t* in, uint8_t* in_max, char* out_buf, char* out_max, int cdns_version, int* err, FILE* F_out)
 {
     char* p_out;
     int64_t val;
@@ -1055,7 +1055,7 @@ uint8_t* cdns::dump_block_tables(uint8_t* in, uint8_t* in_max, char* out_buf, ch
                     }
                     else if (inner_val == 3) {
                         fprintf(F_out, "[\n");
-                        in = dump_qr_sigs(in, in_max, out_buf, out_max, err, F_out);
+                        in = dump_qr_sigs(in, in_max, out_buf, out_max, cdns_version, err, F_out);
                         fprintf(F_out, "                ]");
                     }
                     else if (inner_val == 4) {
@@ -1096,7 +1096,7 @@ uint8_t* cdns::dump_block_tables(uint8_t* in, uint8_t* in_max, char* out_buf, ch
     return in;
 }
 
-uint8_t* cdns::dump_queries(uint8_t* in, uint8_t* in_max, char* out_buf, char* out_max, int* err, FILE* F_out)
+uint8_t* cdns::dump_queries(uint8_t* in, uint8_t* in_max, char* out_buf, char* out_max, int cdns_version, int* err, FILE* F_out)
 {
     int64_t val;
     int outer_type = CBOR_CLASS(*in);
@@ -1136,7 +1136,7 @@ uint8_t* cdns::dump_queries(uint8_t* in, uint8_t* in_max, char* out_buf, char* o
                     fprintf(F_out, ",\n");
                 }
                 /* One item per line, only print the first 10 items */
-                in = dump_query(in, in_max, out_buf, out_max, err, F_out);
+                in = dump_query(in, in_max, out_buf, out_max, cdns_version, err, F_out);
             }
             else {
                 in = cbor_skip(in, in_max, err);
@@ -1154,7 +1154,7 @@ uint8_t* cdns::dump_queries(uint8_t* in, uint8_t* in_max, char* out_buf, char* o
     return in;
 }
 
-uint8_t* cdns::dump_query(uint8_t* in, const uint8_t* in_max, char* out_buf, char* out_max, int* err, FILE* F_out)
+uint8_t* cdns::dump_query(uint8_t* in, const uint8_t* in_max, char* out_buf, char* out_max, int cdns_version, int* err, FILE* F_out)
 {
     char* p_out;
     int64_t val;
@@ -1205,48 +1205,92 @@ uint8_t* cdns::dump_query(uint8_t* in, const uint8_t* in_max, char* out_buf, cha
                         fprintf(F_out, ",\n");
                     }
                     rank++;
-                    if (inner_val == 0) {
-                        fprintf(F_out, "                    --time_useconds,\n");
-                    } else if (inner_val == 1) {
-                        fprintf(F_out, "                    --time_pseconds,\n");
+                    if (cdns_version == 0) {
+                        if (inner_val == 0) {
+                            fprintf(F_out, "                    --time_useconds,\n");
+                        }
+                        else if (inner_val == 1) {
+                            fprintf(F_out, "                    --time_pseconds,\n");
+                        }
+                        else if (inner_val == 2) {
+                            fprintf(F_out, "                    --client_address_index,\n");
+                        }
+                        else if (inner_val == 3) {
+                            fprintf(F_out, "                    --client_port,\n");
+                        }
+                        else if (inner_val == 4) {
+                            fprintf(F_out, "                    --transaction_id,\n");
+                        }
+                        else if (inner_val == 5) {
+                            fprintf(F_out, "                    --query_signature_index,\n");
+                        }
+                        else if (inner_val == 6) {
+                            fprintf(F_out, "                    --client_hoplimit,\n");
+                        }
+                        else if (inner_val == 7) {
+                            fprintf(F_out, "                    --delay_useconds,\n");
+                        }
+                        else if (inner_val == 8) {
+                            fprintf(F_out, "                    --delay_pseconds,\n");
+                        }
+                        else if (inner_val == 9) {
+                            fprintf(F_out, "                    --query_name_index,\n");
+                        }
+                        else if (inner_val == 10) {
+                            fprintf(F_out, "                    --query_size,\n");
+                        }
+                        else if (inner_val == 11) {
+                            fprintf(F_out, "                    --response_size,\n");
+                        }
+                        else if (inner_val == 12) {
+                            fprintf(F_out, "                    --query_extended,\n");
+                        }
+                        else if (inner_val == 13) {
+                            fprintf(F_out, "                    --response_extended,\n");
+                        }
                     }
-                    else if (inner_val == 2) {
-                        fprintf(F_out, "                    --client_address_index,\n");
-                    }
-                    else if (inner_val == 3) {
-                        fprintf(F_out, "                    --client_port,\n");
-                    }
-                    else if (inner_val == 4) {
-                        fprintf(F_out, "                    --transaction_id,\n");
-                    }
-                    else if (inner_val == 5) {
-                        fprintf(F_out, "                    --query_signature_index,\n");
-                    }
-                    else if (inner_val == 6) {
-                        fprintf(F_out, "                    --client_hoplimit,\n");
-                    }
-                    else if (inner_val == 7) {
-                        fprintf(F_out, "                    --delay_useconds,\n");
-                    }
-                    else if (inner_val == 8) {
-                        fprintf(F_out, "                    --delay_pseconds,\n");
-                    }
-                    else if (inner_val == 9) {
-                        fprintf(F_out, "                    --query_name_index,\n");
-                    }
-                    else if (inner_val == 10) {
-                        fprintf(F_out, "                    --query_size,\n");
-                    }
-                    else if (inner_val == 11) {
-                        fprintf(F_out, "                    --response_size,\n");
-                    }
-                    else if (inner_val == 12) {
-                        fprintf(F_out, "                    --query_extended,\n");
-                    }
-                    else if (inner_val == 13) {
-                        fprintf(F_out, "                    --response_extended,\n");
-                    }
+                    else {
 
+                        if (inner_val == 0) {
+                            fprintf(F_out, "                    --time_offset,\n");
+                        }
+                        else if (inner_val == 1) {
+                            fprintf(F_out, "                    --client_address_index,\n");
+                        }
+                        else if (inner_val == 2) {
+                            fprintf(F_out, "                    --client_port,\n");
+                        }
+                        else if (inner_val == 3) {
+                            fprintf(F_out, "                    --transaction_id,\n");
+                        }
+                        else if (inner_val == 4) {
+                            fprintf(F_out, "                    --query_signature_index,\n");
+                        }
+                        else if (inner_val == 5) {
+                            fprintf(F_out, "                    --client_hoplimit,\n");
+                        }
+                        else if (inner_val == 6) {
+                            fprintf(F_out, "                    --response_delay,\n");
+                        }
+                        else if (inner_val == 7) {
+                            fprintf(F_out, "                    --query_name_index,\n");
+                        }
+                        else if (inner_val == 8) {
+                            fprintf(F_out, "                    --query_size,\n");
+                        }
+                        else if (inner_val == 9) {
+                            fprintf(F_out, "                    --response_size,\n");
+                        }
+                        else if (inner_val == 10) {
+                            fprintf(F_out, "                    --response_processing_data,\n");
+                        }
+                        else if (inner_val == 11) {
+                            fprintf(F_out, "                    --query_extended,\n");
+                        }
+                        else if (inner_val == 12) {
+                            fprintf(F_out, "                    --response_extended,\n");
+                        }
+                    }
                     fprintf(F_out, "                    %d, ", (int)inner_val);
                     p_out = out_buf;
                     in = cbor_to_text(in, in_max, &p_out, out_max, err);
@@ -1397,7 +1441,7 @@ uint8_t* cdns::dump_class_type(uint8_t* in, uint8_t* in_max, char* out_buf, char
     return in;
 }
 
-uint8_t* cdns::dump_qr_sigs(uint8_t* in, uint8_t* in_max, char* out_buf, char* out_max, int* err, FILE* F_out)
+uint8_t* cdns::dump_qr_sigs(uint8_t* in, uint8_t* in_max, char* out_buf, char* out_max, int cdns_version, int* err, FILE* F_out)
 {
     int64_t val;
     int outer_type = CBOR_CLASS(*in);
@@ -1437,7 +1481,7 @@ uint8_t* cdns::dump_qr_sigs(uint8_t* in, uint8_t* in_max, char* out_buf, char* o
                     fprintf(F_out, ",\n");
                 }
                 /* One item per line, only print the first 10 items */
-                in = dump_qr_sig(in, in_max, out_buf, out_max, err, F_out);
+                in = dump_qr_sig(in, in_max, out_buf, out_max, cdns_version, err, F_out);
             }
             else {
                 in = cbor_skip(in, in_max, err);
@@ -1455,7 +1499,7 @@ uint8_t* cdns::dump_qr_sigs(uint8_t* in, uint8_t* in_max, char* out_buf, char* o
     return in;
 }
 
-uint8_t* cdns::dump_qr_sig(uint8_t* in, uint8_t* in_max, char* out_buf, char* out_max, int* err, FILE* F_out)
+uint8_t* cdns::dump_qr_sig(uint8_t* in, uint8_t* in_max, char* out_buf, char* out_max, int cdns_version, int* err, FILE* F_out)
 {
     char* p_out;
     int64_t val;
@@ -1506,53 +1550,108 @@ uint8_t* cdns::dump_qr_sig(uint8_t* in, uint8_t* in_max, char* out_buf, char* ou
                         fprintf(F_out, ",\n");
                     }
                     rank++;
-                    if (inner_val == 0) {
-                        fprintf(F_out, "                        --server_address_index,\n");
+                    if (cdns_version == 0) {
+                        if (inner_val == 0) {
+                            fprintf(F_out, "                        --server_address_index,\n");
+                        }
+                        else if (inner_val == 1) {
+                            fprintf(F_out, "                        --server_port,\n");
+                        }
+                        else if (inner_val == 2) {
+                            fprintf(F_out, "                        --transport_flags,\n");
+                        }
+                        else if (inner_val == 3) {
+                            fprintf(F_out, "                        --qr_sig_flags,\n");
+                        }
+                        else if (inner_val == 4) {
+                            fprintf(F_out, "                        --query_opcode,\n");
+                        }
+                        else if (inner_val == 5) {
+                            fprintf(F_out, "                        --qr_dns_flags,\n");
+                        }
+                        else if (inner_val == 6) {
+                            fprintf(F_out, "                        --query_rcode,\n");
+                        }
+                        else if (inner_val == 7) {
+                            fprintf(F_out, "                        --query_classtype_index,\n");
+                        }
+                        else if (inner_val == 8) {
+                            fprintf(F_out, "                        --query_qd_count,\n");
+                        }
+                        else if (inner_val == 9) {
+                            fprintf(F_out, "                        --query_an_count,\n");
+                        }
+                        else if (inner_val == 10) {
+                            fprintf(F_out, "                        --query_ar_count,\n");
+                        }
+                        else if (inner_val == 11) {
+                            fprintf(F_out, "                        --query_ns_count,\n");
+                        }
+                        else if (inner_val == 12) {
+                            fprintf(F_out, "                        --edns_version,\n");
+                        }
+                        else if (inner_val == 13) {
+                            fprintf(F_out, "                        --udp_buf_size,\n");
+                        }
+                        else if (inner_val == 14) {
+                            fprintf(F_out, "                        --opt_rdata_index,\n");
+                        }
+                        else if (inner_val == 15) {
+                            fprintf(F_out, "                        --response_rcode,\n");
+                        }
                     }
-                    else if (inner_val == 1) {
-                        fprintf(F_out, "                        --server_port,\n");
-                    }
-                    else if (inner_val == 2) {
-                        fprintf(F_out, "                        --transport_flags,\n");
-                    }
-                    else if (inner_val == 3) {
-                        fprintf(F_out, "                        --qr_sig_flags,\n");
-                    }
-                    else if (inner_val == 4) {
-                        fprintf(F_out, "                        --query_opcode,\n");
-                    }
-                    else if (inner_val == 5) {
-                        fprintf(F_out, "                        --qr_dns_flags,\n");
-                    }
-                    else if (inner_val == 6) {
-                        fprintf(F_out, "                        --query_rcode,\n");
-                    }
-                    else if (inner_val == 7) {
-                        fprintf(F_out, "                        --query_classtype_index,\n");
-                    }
-                    else if (inner_val == 8) {
-                        fprintf(F_out, "                        --query_qd_count,\n");
-                    }
-                    else if (inner_val == 9) {
-                        fprintf(F_out, "                        --query_an_count,\n");
-                    }
-                    else if (inner_val == 10) {
-                        fprintf(F_out, "                        --query_ar_count,\n");
-                    }
-                    else if (inner_val == 11) {
-                        fprintf(F_out, "                        --query_ns_count,\n");
-                    }
-                    else if (inner_val == 12) {
-                        fprintf(F_out, "                        --edns_version,\n");
-                    }
-                    else if (inner_val == 13) {
-                        fprintf(F_out, "                        --udp_buf_size,\n");
-                    }
-                    else if (inner_val == 14) {
-                        fprintf(F_out, "                        --opt_rdata_index,\n");
-                    }
-                    else if (inner_val == 15) {
-                        fprintf(F_out, "                        --response_rcode,\n");
+                    else {
+                        if (inner_val == 0) {
+                            fprintf(F_out, "                        --server_address_index,\n");
+                        }
+                        else if (inner_val == 1) {
+                            fprintf(F_out, "                        --server_port,\n");
+                        }
+                        else if (inner_val == 2) {
+                            fprintf(F_out, "                        --transport_flags,\n");
+                        }
+                        else if (inner_val == 3) {
+                            fprintf(F_out, "                        --qr_type,\n");
+                        }
+                        else if (inner_val == 4) {
+                            fprintf(F_out, "                        --query_sig_flags,\n");
+                        }
+                        else if (inner_val == 5) {
+                            fprintf(F_out, "                        --qr_opcode,\n");
+                        }
+                        else if (inner_val == 6) {
+                            fprintf(F_out, "                        --query_dns_flags,\n");
+                        }
+                        else if (inner_val == 7) {
+                            fprintf(F_out, "                        --query_rcode,\n");
+                        }
+                        else if (inner_val == 8) {
+                            fprintf(F_out, "                        --query_class_type_index,\n");
+                        }
+                        else if (inner_val == 9) {
+                            fprintf(F_out, "                        --query_qd_count,\n");
+                        }
+                        else if (inner_val == 10) {
+                            fprintf(F_out, "                        --query_an_count,\n");
+                        }
+                        else if (inner_val == 11) {
+                            fprintf(F_out, "                        --query_ns_count,\n");
+                        }
+                        else if (inner_val == 12) {
+                            fprintf(F_out, "                        --query_ar_count,\n");
+                        }
+                        else if (inner_val == 13) {
+                            fprintf(F_out, "                        --query_edns_version,\n");
+                        }
+                        else if (inner_val == 14) {
+                            fprintf(F_out, "                        --udp_buf_size,\n");
+                        }
+                        else if (inner_val == 15) {
+                            fprintf(F_out, "                        --opt_rdata_index,\n");
+                        }
+                        else if (inner_val == 16) {
+                            fprintf(F_out, "                        --response_rcode,\n");
+                        }
                     }
 
                     fprintf(F_out, "                        %d, ", (int)inner_val);
