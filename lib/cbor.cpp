@@ -712,6 +712,25 @@ uint8_t* cbor_parse_int64(uint8_t* in, uint8_t const* in_max, int64_t* v, int is
     return in;
 }
 
+/* Boolean type is encoded as a subset of the "single value type", looking only at "true" or "false" values */
+uint8_t* cbor_parse_boolean(uint8_t* in, uint8_t const* in_max, bool* v, int* err)
+{
+    int64_t val;
+    int outer_type = CBOR_CLASS(*in);
+
+    in = cbor_get_number(in, in_max, &val);
+
+    if (outer_type == CBOR_T_FLOAT && (val == 20 || val == 21)) {
+        *v = (val == 21);
+    }
+    else {
+        *err = CBOR_MALFORMED_VALUE;
+        in = NULL;
+    }
+
+    return in;
+}
+
 
 
 cbor_bytes::cbor_bytes() :
@@ -829,5 +848,125 @@ uint8_t* cbor_bytes::parse(uint8_t* in, uint8_t const* in_max, int* err)
 uint8_t* cbor_object_parse(uint8_t* in, uint8_t const* in_max, int* v, int* err)
 {
     in = cbor_parse_int(in, in_max, v, 0, err);
+    return in;
+}
+
+cbor_text::cbor_text():
+    v(NULL),
+    l(0)
+{
+}
+
+cbor_text::cbor_text(const cbor_text& other)
+{
+    l = other.l;
+    if (l > 0) {
+        v = new char[l+1];
+        if (v == NULL) {
+            l = 0;
+        }
+        else {
+            memcpy(v, other.v, l);
+            v[l] = 0;
+        }
+    }
+    else {
+        v = NULL;
+    }
+}
+
+cbor_text::~cbor_text()
+{
+    if (v != NULL) {
+        delete[] v;
+        v = NULL;
+    }
+
+    l = 0;
+}
+
+uint8_t* cbor_text::parse(uint8_t* in, uint8_t const* in_max, int* err)
+{
+    uint8_t* first = in;
+
+    if (v != NULL || l != 0 || in == NULL) {
+        *err = CBOR_UNEXPECTED;
+        in = NULL;
+    }
+    else {
+        int outer_type = CBOR_CLASS(*in);
+        int64_t val;
+
+        in = cbor_get_number(in, in_max, &val);
+
+        if (in == NULL || outer_type != CBOR_T_TEXT) {
+            *err = CBOR_MALFORMED_VALUE;
+            in = NULL;
+        }
+        else if (val == CBOR_END_OF_ARRAY) {
+            /* Need to allocate enough bytes to hold the content. */
+            uint8_t* last = cbor_skip(first, in_max, err);
+
+            if (last == NULL) {
+                in = NULL;
+            }
+            else {
+                size_t allocated = (last - first) + 1;
+                v = new char[allocated];
+
+                if (v == NULL) {
+                    in = NULL;
+                    *err = CBOR_MEMORY;
+                }
+            }
+
+            while (in < in_max && in != NULL) {
+                if (*in == CBOR_END_MARK) {
+                    in++;
+                    break;
+                }
+                else {
+                    int64_t val;
+                    int cbor_class = CBOR_CLASS(*in);
+
+                    in = cbor_get_number(in, in_max, &val);
+
+                    if (in == NULL) {
+                        *err = (int)val;
+                    }
+                    else if (val < 0 || in + val > in_max || cbor_class != CBOR_T_TEXT) {
+                        *err = CBOR_MALFORMED_VALUE;
+                        in = NULL;
+                    }
+                    else if (val > 0) {
+                        memcpy(v + l, in, (size_t)val);
+                        l += (size_t)val;
+                        v[l] = 0;
+                        in += val;
+                    }
+                }
+            }
+        }
+        else {
+            if (val < 0 || in + val > in_max) {
+                *err = CBOR_MALFORMED_VALUE;
+                in = NULL;
+            }
+            else if (val > 0) {
+                v = new char[(size_t)(val+1)];
+                if (v == NULL) {
+                    in = NULL;
+                    *err = CBOR_MEMORY;
+                }
+                else {
+                    memcpy(v, in, (size_t)val);
+                    l = (size_t)val;
+                    v[l] = 0;
+                    in += val;
+                }
+            }
+        }
+    }
+
     return in;
 }

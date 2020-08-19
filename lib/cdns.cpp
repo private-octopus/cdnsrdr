@@ -27,6 +27,7 @@
 #include "cdns.h"
 
 cdns::cdns():
+    index_offset(0),
     first_block_start_us(0),
     F(NULL),
     buf(NULL),
@@ -178,6 +179,9 @@ bool cdns::open_block(int* err)
     *err = 0;
     if (!preamble_parsed) {
         ret = read_preamble(err);
+        if (is_old_version()) {
+            index_offset = 1;
+        }
     }
 
     if (ret && nb_blocks_read >= nb_blocks_present) {
@@ -204,7 +208,7 @@ bool cdns::open_block(int* err)
         else {
             uint8_t* old_in = in;
 
-            in = block.parse(old_in, in_max, err);
+            in = block.parse(old_in, in_max, err, this);
 
             if (in != NULL) {
                 nb_blocks_read++;
@@ -226,6 +230,29 @@ bool cdns::open_block(int* err)
     }
 
     return ret;
+}
+
+int64_t cdns::get_ticks_per_second(int64_t block_id)
+{
+    int64_t tps = 1000000; /* Microseconds by default */
+    if (preamble_parsed && preamble.cdns_version_major > 0 &&
+        block_id > 0 && block_id < (int64_t) preamble.block_parameters.size()) {
+        tps = preamble.block_parameters[block_id].storage.ticks_per_second;
+    }
+
+    return tps;
+}
+
+int64_t cdns::ticks_to_microseconds(int64_t ticks, int64_t block_id)
+{
+    int64_t tps = get_ticks_per_second(block_id);
+
+    if (tps != 1000000) {
+        ticks *= tps;
+        ticks /= 1000000;
+    }
+
+    return ticks;
 }
 
 int cdns::get_dns_flags(int q_dns_flags, bool is_response)
@@ -284,7 +311,6 @@ bool cdns::load_entire_file()
     return (ret);
 }
 
-
 bool cdns::read_preamble(int * err)
 {
     bool ret = true;
@@ -323,7 +349,7 @@ bool cdns::read_preamble(int * err)
 
             if (in != NULL && in < in_max && *in != 0xff) {
                 /* Skip preamble -- to do, parse and store values  */
-                in = cbor_skip(in, in_max, err);
+                in = preamble.parse(in, in_max, err);
                 val--;
             }
 
@@ -1733,6 +1759,7 @@ uint8_t* cdns::dump_list(uint8_t* in, uint8_t* in_max, char* out_buf, char* out_
 }
 
 cdnsBlock::cdnsBlock():
+    current_cdns(NULL),
     is_filled(false),
     block_start_us(0)
 {
@@ -1742,10 +1769,11 @@ cdnsBlock::~cdnsBlock()
 {
 }
 
-uint8_t * cdnsBlock::parse(uint8_t* in, uint8_t const* in_max, int* err)
+uint8_t * cdnsBlock::parse(uint8_t* in, uint8_t const* in_max, int* err, cdns * current_cdns)
 {
     /* Records are held in a map */
     clear();
+    this->current_cdns = current_cdns;
     is_filled = 1;
     in = cbor_map_parse(in, in_max, this, err);
 
@@ -1762,19 +1790,19 @@ uint8_t* cdnsBlock::parse_map_item(uint8_t* in, uint8_t const* in_max, int64_t v
 {
     switch (val) {
     case 0: /* Block preamble */
-        in = preamble.parse(in, in_max, err);
+        in = preamble.parse(in, in_max, err, this);
         break;
     case 1: /* Block statistics */
-        in = statistics.parse(in, in_max, err);
+        in = statistics.parse(in, in_max, err, this);
         break;
     case 2: /* Block Tables */
-        in = tables.parse(in, in_max, err);
+        in = tables.parse(in, in_max, err, this);
         break;
     case 3: /* Block Queries */
-        in = cbor_array_parse(in, in_max, &queries, err);
+        in = cbor_ctx_array_parse(in, in_max, &queries, err, this);
         break;
     case 4: /* Address event counts */
-        in = cbor_array_parse(in, in_max, &address_events, err);
+        in = cbor_ctx_array_parse(in, in_max, &address_events, err, this);
         break;
     default:
         in = cbor_skip(in, in_max, err);
@@ -1792,6 +1820,7 @@ uint8_t* cdnsBlock::parse_map_item(uint8_t* in, uint8_t const* in_max, int64_t v
 
 void cdnsBlock::clear()
 {
+    current_cdns = NULL;
     if (is_filled) {
         preamble.clear();
         statistics.clear();
@@ -1836,6 +1865,7 @@ uint8_t* cdns_class_id::parse_map_item(uint8_t* in, uint8_t const * in_max, int6
 }
 
 cdnsBlockTables::cdnsBlockTables():
+    current_block(NULL),
     is_filled(false)
 {
 }
@@ -1844,11 +1874,12 @@ cdnsBlockTables::~cdnsBlockTables()
 {
 }
 
-uint8_t* cdnsBlockTables::parse(uint8_t* in, uint8_t const* in_max, int* err)
+uint8_t* cdnsBlockTables::parse(uint8_t* in, uint8_t const* in_max, int* err, cdnsBlock * current_block)
 {
     if (is_filled) {
         clear();
     }
+    this->current_block = current_block;
     is_filled = true;
     return cbor_map_parse(in, in_max, this, err);
 }
@@ -1868,7 +1899,7 @@ uint8_t* cdnsBlockTables::parse_map_item(uint8_t* old_in, uint8_t const* in_max,
         in = cbor_array_parse(in, in_max, &name_rdata, err);
         break;
     case 3: // query_signature
-        in = cbor_array_parse(in, in_max, &q_sigs, err);
+        in = cbor_ctx_array_parse(in, in_max, &q_sigs, err, current_block);
         break;
     case 4: // question_list,
         in = cbor_array_parse(in, in_max, &question_list, err);
@@ -1914,10 +1945,12 @@ void cdnsBlockTables::clear()
     qrr.clear();
     rr_list.clear();
     rrs.clear();
+    current_block = NULL;
     is_filled = false;
 }
 
 cdns_query::cdns_query():
+    current_block(NULL),
     time_offset_usec(0),
     client_address_index(-1),
     client_port(0),
@@ -1935,12 +1968,75 @@ cdns_query::~cdns_query()
 {
 }
 
-uint8_t* cdns_query::parse(uint8_t* in, uint8_t const* in_max, int* err)
+uint8_t* cdns_query::parse(uint8_t* in, uint8_t const* in_max, int* err, cdnsBlock* current_block)
 {
+    this->current_block = current_block;
     return cbor_map_parse(in, in_max, this, err);
 }
 
 uint8_t* cdns_query::parse_map_item(uint8_t* old_in, uint8_t const* in_max, int64_t val, int* err)
+{
+    uint8_t* in = old_in;
+
+    if (current_block->current_cdns->is_old_version()) {
+        in = parse_map_item_old(in, in_max, val, err);
+    }
+    else {
+        switch (val) {
+        case 0: // time_useconds
+            in = cbor_parse_int(in, in_max, &time_offset_usec, 1, err);
+            break;
+        case 1: // client_address_index
+            in = cbor_parse_int(in, in_max, &client_address_index, 0, err);
+            break;
+        case 2: // client_port,
+            in = cbor_parse_int(in, in_max, &client_port, 0, err);
+            break;
+        case 3: // transaction_id
+            in = cbor_parse_int(in, in_max, &transaction_id, 0, err);
+            break;
+        case 4: // query_signature_index
+            in = cbor_parse_int(in, in_max, &query_signature_index, 0, err);
+            break;
+        case 5: // client_hoplimit
+            in = cbor_parse_int(in, in_max, &client_hoplimit, 0, err);
+            break;
+        case 6: // delay_useconds
+            in = cbor_parse_int(in, in_max, &delay_useconds, 1, err);
+            break;
+        case 7: // query_name_index
+            in = cbor_parse_int(in, in_max, &query_name_index, 0, err);
+            break;
+        case 8: // query_size
+            in = cbor_parse_int(in, in_max, &query_size, 0, err);
+            break;
+        case 9: // response_size
+            in = cbor_parse_int(in, in_max, &response_size, 0, err);
+            break;
+        case 10: // ResponseProcessingData
+            in = rpd.parse(in, in_max, err);
+            break;
+        case 11: // query_extended
+            in = q_extended.parse(in, in_max, err);
+            break;
+        case 12: // response_extended,\n");
+            in = r_extended.parse(in, in_max, err);
+            break;
+        default:
+            /* TODO: something */
+            in = cbor_skip(in, in_max, err);
+            break;
+        }
+
+        if (in == NULL) {
+            fprintf(stderr, "\nError %d parsing query field type %d\n", *err, (int)val);
+        }
+    }
+
+    return in;
+}
+
+uint8_t* cdns_query::parse_map_item_old(uint8_t* old_in, uint8_t const* in_max, int64_t val, int* err)
 {
     uint8_t* in = old_in;
     switch (val) {
@@ -2012,7 +2108,6 @@ uint8_t* cdns_query::parse_map_item(uint8_t* old_in, uint8_t const* in_max, int6
 
     return in;
 }
-
 cdns_qr_extended::cdns_qr_extended():
     question_index(-1),
     answer_index(-1),
@@ -2068,10 +2163,12 @@ void cdns_qr_extended::clear()
     is_filled = false;
 }
 
-cdns_query_signature::cdns_query_signature():
+cdns_query_signature::cdns_query_signature() :
+    current_block(NULL),
     server_address_index(-1),
     server_port(0),
-    transport_flags(0),
+    qr_transport_flags(0),
+    qr_type(0),
     qr_sig_flags(0),
     query_opcode(0),
     qr_dns_flags(0),
@@ -2092,12 +2189,78 @@ cdns_query_signature::~cdns_query_signature()
 {
 }
 
-uint8_t* cdns_query_signature::parse(uint8_t* in, uint8_t const* in_max, int* err)
+uint8_t* cdns_query_signature::parse(uint8_t* in, uint8_t const* in_max, int* err, cdnsBlock* current_block)
 {
+    this->current_block = current_block;
     return cbor_map_parse(in, in_max, this, err);
+    /* TODO: deal with index pointers changes between old and new. */
 }
 
 uint8_t* cdns_query_signature::parse_map_item(uint8_t* in, uint8_t const* in_max, int64_t val, int* err)
+{
+    if (current_block->current_cdns->is_old_version()) {
+        in = parse_map_item_old(in, in_max, val, err);
+    }
+    switch (val) {
+    case 0: /*  server_address_index */
+        in = cbor_parse_int(in, in_max, &server_address_index, 0, err);
+        break;
+    case 1: /*  server_port */
+        in = cbor_parse_int(in, in_max, &server_port, 0, err);
+        break;
+    case 2: /*  transport_flags */
+        in = cbor_parse_int(in, in_max, &qr_transport_flags, 0, err);
+        break;
+    case 3: /* qr type */
+        in = cbor_parse_int(in, in_max, &qr_type, 0, err);
+        break;
+    case 4: /*  qr_sig_flags */
+        in = cbor_parse_int(in, in_max, &qr_sig_flags, 0, err);
+        break;
+    case 5: /*  query_opcode */
+        in = cbor_parse_int(in, in_max, &query_opcode, 0, err);
+        break;
+    case 6: /*  qr_dns_flags */
+        in = cbor_parse_int(in, in_max, &qr_dns_flags, 0, err);
+        break;
+    case 7: /*  query_rcode */
+        in = cbor_parse_int(in, in_max, &query_rcode, 0, err);
+        break;
+    case 8: /*  query_classtype_index */
+        in = cbor_parse_int(in, in_max, &query_classtype_index, 0, err);
+        break;
+    case 9: /*  query_qd_count */
+        in = cbor_parse_int(in, in_max, &query_qd_count, 0, err);
+        break;
+    case 10: /*  query_an_count */
+        in = cbor_parse_int(in, in_max, &query_an_count, 0, err);
+        break;
+    case 11: /*  query_ns_count */
+        in = cbor_parse_int(in, in_max, &query_ns_count, 0, err);
+        break;
+    case 12: /*  query_ar_count */
+        in = cbor_parse_int(in, in_max, &query_ar_count, 0, err);
+        break;
+    case 13: /*  edns_version */
+        in = cbor_parse_int(in, in_max, &edns_version, 0, err);
+        break;
+    case 14: /*  udp_buf_size */
+        in = cbor_parse_int(in, in_max, &udp_buf_size, 0, err);
+        break;
+    case 15: /*  opt_rdata_index */
+        in = cbor_parse_int(in, in_max, &opt_rdata_index, 0, err);
+        break;
+    case 16: /*  response_rcode */
+        in = cbor_parse_int(in, in_max, &response_rcode, 0, err);
+        break;
+    default:
+        in = cbor_skip(in, in_max, err);
+        break;
+    }
+    return in;
+}
+
+uint8_t* cdns_query_signature::parse_map_item_old(uint8_t* in, uint8_t const* in_max, int64_t val, int* err)
 {
     switch (val) {
     case 0: /*  server_address_index */
@@ -2107,7 +2270,7 @@ uint8_t* cdns_query_signature::parse_map_item(uint8_t* in, uint8_t const* in_max
         in = cbor_parse_int(in, in_max, &server_port, 0, err);
         break;
     case 2: /*  transport_flags */
-        in = cbor_parse_int(in, in_max, &transport_flags, 0, err);
+        in = cbor_parse_int(in, in_max, &qr_transport_flags, 0, err);
         break;
     case 3: /*  qr_sig_flags */
         in = cbor_parse_int(in, in_max, &qr_sig_flags, 0, err);
@@ -2154,6 +2317,7 @@ uint8_t* cdns_query_signature::parse_map_item(uint8_t* in, uint8_t const* in_max
     }
     return in;
 }
+
 
 cdns_question::cdns_question():
     name_index(-1),
@@ -2251,17 +2415,13 @@ uint8_t* cdns_rr_list::parse(uint8_t* in, uint8_t const* in_max, int* err)
 }
 
 cdns_block_statistics::cdns_block_statistics() :
-    total_packets(0),
-    total_pairs(0),
+    current_block(NULL),
+    processed_messages(0),
+    qr_data_items(0),
     unmatched_queries(0),
     unmatched_responses(0),
-    completely_malformed_packets(0),
-    partially_malformed_packets(0),
-    compactor_non_dns_packets(0),
-    compactor_out_of_order_packets(0),
-    compactor_missing_pairs(0),
-    compactor_missing_packets(0),
-    compactor_missing_non_dns(0),
+    discarded_opcode(0),
+    malformed_items(0),
     is_filled(false)
 {
 }
@@ -2270,10 +2430,11 @@ cdns_block_statistics::~cdns_block_statistics()
 {
 }
 
-uint8_t* cdns_block_statistics::parse(uint8_t* in, uint8_t const* in_max, int* err)
+uint8_t* cdns_block_statistics::parse(uint8_t* in, uint8_t const* in_max, int* err, cdnsBlock* current_block)
 {
     clear();
     is_filled = true;
+    this->current_block = current_block;
     return cbor_map_parse(in, in_max, this, err);
 }
 
@@ -2281,11 +2442,11 @@ uint8_t* cdns_block_statistics::parse_map_item(uint8_t* in, uint8_t const* in_ma
 {
 
     switch (val) {
-    case 0: // total_packets
-        in = cbor_parse_int(in, in_max, &total_packets, 0, err);
+    case 0:
+        in = cbor_parse_int(in, in_max, &processed_messages, 0, err);
         break;
-    case 1: // total_pairs,
-        in = cbor_parse_int(in, in_max, &total_pairs, 0, err);
+    case 1:
+        in = cbor_parse_int(in, in_max, &qr_data_items, 0, err);
         break;
     case 2: // unmatched_queries,
         in = cbor_parse_int(in, in_max, &unmatched_queries, 0, err);
@@ -2293,26 +2454,21 @@ uint8_t* cdns_block_statistics::parse_map_item(uint8_t* in, uint8_t const* in_ma
     case 3: // unmatched_responses,
         in = cbor_parse_int(in, in_max, &unmatched_responses, 0, err);
         break;
-    case 4: // completely_malformed_packets,
-        in = cbor_parse_int(in, in_max, &completely_malformed_packets, 0, err);
+    case 4: // discarded opcode (v1.0) or malformed_packets (v0.5)
+        if (current_block->current_cdns->is_old_version()) {
+            in = cbor_parse_int(in, in_max, &malformed_items, 0, err);
+        }
+        else {
+            in = cbor_parse_int(in, in_max, &discarded_opcode, 0, err);
+        }
         break;
     case 5: // partially_malformed_packets,
-        in = cbor_parse_int(in, in_max, &partially_malformed_packets, 0, err);
-        break;
-    case 6: // compactor_non_dns_packets,
-        in = cbor_parse_int(in, in_max, &compactor_non_dns_packets, 0, err);
-        break;
-    case 7: // compactor_out_of_order_packets,
-        in = cbor_parse_int(in, in_max, &compactor_out_of_order_packets, 0, err);
-        break;
-    case 8: // compactor_missing_pairs,
-        in = cbor_parse_int(in, in_max, &compactor_missing_pairs, 0, err);
-        break;
-    case 9: // compactor_missing_packets,
-        in = cbor_parse_int(in, in_max, &compactor_missing_packets, 0, err);
-        break;
-    case 10: // compactor_missing_non_dns
-        in = cbor_parse_int(in, in_max, &compactor_missing_non_dns, 0, err);
+        if (current_block->current_cdns->is_old_version()) {
+            in = cbor_parse_int(in, in_max, &malformed_items, 0, err);
+        }
+        else {
+            in = cbor_skip(in, in_max, err);
+        }
         break;
     default:
         in = cbor_skip(in, in_max, err);
@@ -2324,38 +2480,31 @@ uint8_t* cdns_block_statistics::parse_map_item(uint8_t* in, uint8_t const* in_ma
 void cdns_block_statistics::clear()
 {
     if (is_filled) {
-        total_packets = 0;
-        total_pairs = 0;
+        current_block = NULL;
+        processed_messages = 0;
+        qr_data_items = 0;
         unmatched_queries = 0;
         unmatched_responses = 0;
-        completely_malformed_packets = 0;
-        partially_malformed_packets = 0;
-        compactor_non_dns_packets = 0;
-        compactor_out_of_order_packets = 0;
-        compactor_missing_pairs = 0;
-        compactor_missing_packets = 0;
-        compactor_missing_non_dns = 0;
+        discarded_opcode = 0;
+        malformed_items = 0;
         is_filled = 0;
     }
 }
 
-cdns_block_preamble::cdns_block_preamble():
-    earliest_time_sec(0), 
+cdns_block_preamble_old::cdns_block_preamble_old() :
+    earliest_time_sec(0),
     earliest_time_usec(0),
-    is_filled(false),
-    v_major(0),
-    v_minor(0)
+    is_filled(false)
 {
 }
 
-cdns_block_preamble::~cdns_block_preamble()
+cdns_block_preamble_old::~cdns_block_preamble_old()
 {
 }
 
-uint8_t* cdns_block_preamble::parse(uint8_t* in, uint8_t const* in_max, int* err)
+/* TODO: change this to define the new and old formats. */
+uint8_t* cdns_block_preamble_old::parse(uint8_t* in, uint8_t const* in_max, int* err)
 {
-    clear();
-
     in = cbor_map_parse(in, in_max, this, err);
 
     if (!is_filled) {
@@ -2365,7 +2514,7 @@ uint8_t* cdns_block_preamble::parse(uint8_t* in, uint8_t const* in_max, int* err
     return(in);
 }
 
-uint8_t* cdns_block_preamble::parse_map_item(uint8_t* in, uint8_t const* in_max, int64_t val, int* err)
+uint8_t* cdns_block_preamble_old::parse_map_item(uint8_t* in, uint8_t const* in_max, int64_t val, int* err)
 {
     switch (val) {
     case 1: // total_packets
@@ -2395,18 +2544,100 @@ uint8_t* cdns_block_preamble::parse_map_item(uint8_t* in, uint8_t const* in_max,
     return in;
 }
 
+
+cdns_block_preamble::cdns_block_preamble():
+    current_block(NULL),
+    earliest_time_sec(0), 
+    earliest_time_usec(0),
+    block_parameter_index(0),
+    is_filled(false)
+{
+}
+
+cdns_block_preamble::~cdns_block_preamble()
+{
+}
+
+
+uint8_t* cdns_block_preamble::parse(uint8_t* in, uint8_t const* in_max, int* err, cdnsBlock * current_block)
+{
+    clear();
+    this->current_block = current_block;
+
+    if (current_block->current_cdns->is_old_version()) {
+        /* TODO: put the parsing of the time stamp inline, instead of creating an intermediate object */
+        cdns_block_preamble_old old_preamble;
+
+        in = old_preamble.parse(in, in_max, err);
+
+        if (in != NULL) {
+            earliest_time_sec = old_preamble.earliest_time_sec;
+            earliest_time_usec = old_preamble.earliest_time_usec;
+            is_filled = true;
+        }
+    }
+    else {
+        in = cbor_map_parse(in, in_max, this, err);
+        earliest_time_usec = current_block->current_cdns->ticks_to_microseconds(earliest_time_usec, block_parameter_index);
+    }
+
+    if (!is_filled) {
+        *err = CBOR_MALFORMED_VALUE;
+        in = NULL;
+    }
+    return(in);
+}
+
+uint8_t* cdns_block_preamble::parse_map_item(uint8_t* in, uint8_t const* in_max, int64_t val, int* err)
+{
+    switch (val) {
+    case 0:
+        in = parse_time_stamp(in, in_max, err);
+        break;
+    case 1:
+        in = cbor_parse_int64(in, in_max, &block_parameter_index, 0, err);
+        break;
+    default:
+        in = cbor_skip(in, in_max, err);
+        break;
+    }
+
+    return in;
+}
+
+uint8_t* cdns_block_preamble::parse_time_stamp(uint8_t* in, uint8_t const* in_max, int* err)
+{
+    std::vector<int> t;
+    in = cbor_array_parse(in, in_max, &t, err);
+
+    if (in != NULL) {
+        if (t.size() == 2) {
+            earliest_time_sec = t[0];
+            earliest_time_usec = t[1];
+            is_filled = true;
+        }
+        else {
+            *err = CBOR_MALFORMED_VALUE;
+            in = NULL;
+        }
+    }
+
+    return in;
+}
+
 void cdns_block_preamble::clear()
 {
+    current_block = NULL;
     earliest_time_sec = 0;
     earliest_time_usec = 0;
-    v_major = 0;
-    v_minor = 0;
     is_filled = false;
 }
 
 cdns_address_event_count::cdns_address_event_count():
+    current_block(NULL),
     ae_type(0),
     ae_code(0),
+    ae_transport_flags(0),
     ae_address_index(0),
     ae_count(0)
 {
@@ -2416,12 +2647,41 @@ cdns_address_event_count::~cdns_address_event_count()
 {
 }
 
-uint8_t* cdns_address_event_count::parse(uint8_t* in, uint8_t const* in_max, int* err)
+uint8_t* cdns_address_event_count::parse(uint8_t* in, uint8_t const* in_max, int* err, cdnsBlock* current_block)
 {
+    this->current_block = current_block;
     return cbor_map_parse(in, in_max, this, err);
 }
 
 uint8_t* cdns_address_event_count::parse_map_item(uint8_t* in, uint8_t const* in_max, int64_t val, int* err)
+{
+    if (current_block->current_cdns->is_old_version()) {
+        in = parse_map_item_old(in, in_max, val, err);
+    }
+    switch (val) {
+    case 0: // ae_type
+        in = cbor_parse_int(in, in_max, &ae_type, 1, err);
+        break;
+    case 1: // ae_code,
+        in = cbor_parse_int(in, in_max, &ae_code, 1, err);
+        break;
+    case 2: // ae_transport_flags,
+        in = cbor_parse_int(in, in_max, &ae_transport_flags, 1, err);
+        break;
+    case 3: // ae_address_index,
+        in = cbor_parse_int(in, in_max, &ae_address_index, 1, err);
+        break;
+    case 4: // ae_count
+        in = cbor_parse_int(in, in_max, &ae_count, 1, err);
+        break;
+    default:
+        in = cbor_skip(in, in_max, err);
+    }
+
+    return in;
+}
+
+uint8_t* cdns_address_event_count::parse_map_item_old(uint8_t* in, uint8_t const* in_max, int64_t val, int* err)
 {
     switch (val) {
     case 0: // ae_type
@@ -2443,6 +2703,7 @@ uint8_t* cdns_address_event_count::parse_map_item(uint8_t* in, uint8_t const* in
     return in;
 }
 
+
 cdns_question_list::cdns_question_list()
 {
 }
@@ -2454,4 +2715,407 @@ cdns_question_list::~cdns_question_list()
 uint8_t* cdns_question_list::parse(uint8_t* in, uint8_t const* in_max, int* err)
 {
     return cbor_array_parse(in, in_max, &question_table_index, err);
+}
+
+cdnsBlockParameter::cdnsBlockParameter()
+{
+}
+
+cdnsBlockParameter::~cdnsBlockParameter()
+{
+}
+
+uint8_t* cdnsBlockParameter::parse(uint8_t* in, uint8_t const* in_max, int* err)
+{
+    return cbor_map_parse(in, in_max, this, err);
+}
+
+uint8_t* cdnsBlockParameter::parse_map_item(uint8_t* in, uint8_t const* in_max, int64_t val, int* err)
+{
+    switch (val) {
+    case 0: 
+        in = storage.parse(in, in_max, err);
+        break;
+    case 1: 
+        in = collection.parse(in, in_max, err);
+        break;
+    default:
+        in = cbor_skip(in, in_max, err);
+        break;
+    }
+
+    if (in == NULL) {
+        char const* e[] = { "storage", "collection" };
+        int nb_e = (int)sizeof(e) / sizeof(char const*);
+
+        fprintf(stderr, "Cannot parse block element %d (%s), err=%d\n", (int)val, (val >= 0 && val < nb_e) ? e[val] : "unknown", *err);
+    }
+    return in;
+}
+
+void cdnsBlockParameter::clear()
+{
+}
+
+cdnsPreamble::cdnsPreamble()
+{
+}
+
+cdnsPreamble::~cdnsPreamble()
+{
+}
+
+uint8_t* cdnsPreamble::parse(uint8_t* in, uint8_t const* in_max, int* err)
+{
+    return cbor_map_parse(in, in_max, this, err);
+}
+
+uint8_t* cdnsPreamble::parse_map_item(uint8_t* in, uint8_t const* in_max, int64_t val, int* err)
+{
+    switch (val) {
+    case 0: /* Version Major */
+        in = cbor_parse_int64(in, in_max, &cdns_version_major, 0, err);
+        break;
+    case 1: /* Version Minor */
+        in = cbor_parse_int64(in, in_max, &cdns_version_minor, 0, err);
+        break;
+    case 2: /* Version Private */
+        in = cbor_parse_int64(in, in_max, &cdns_version_private, 0, err);
+        break;
+    case 3: /* Block Parameters */
+        if (this->cdns_version_major > 0) {
+            in = cbor_array_parse(in, in_max, &block_parameters, err);
+        }
+        else {
+            in = cbor_array_parse(in, in_max, &old_block_parameters, err);
+        }
+        break;
+    case 4: /* generator-id  -- only present in draft version, part of
+             * block parameter collection data otherwise. */
+        in = generator_id.parse(in, in_max, err);
+        break;
+    case 5: /* host-id   -- only present in draft version, part of
+             * block parameter collection data otherwise. */
+        in = host_id.parse(in, in_max, err);
+        break;
+    default:
+        in = cbor_skip(in, in_max, err);
+        break;
+    }
+
+    if (in == NULL) {
+        char const* e[] = { "v_major", "v_minor", "v_private", "block_param", "generator_id", "host_id" };
+        int nb_e = (int)sizeof(e) / sizeof(char const*);
+
+        fprintf(stderr, "Cannot parse block element %d (%s), err=%d\n", (int)val, (val >= 0 && val < nb_e) ? e[val] : "unknown", *err);
+    }
+    return in;
+}
+
+void cdnsPreamble::clear()
+{
+}
+
+cdnsStorageParameter::cdnsStorageParameter():
+    ticks_per_second(1000000),
+    max_block_items(0),
+    storage_flags(0),
+    client_address_prefix_ipv4(0),
+    client_address_prefix_ipv6(0),
+    server_address_prefix_ipv4(0),
+    server_address_prefix_ipv6(0)
+{
+}
+
+cdnsStorageParameter::~cdnsStorageParameter()
+{
+}
+
+uint8_t* cdnsStorageParameter::parse(uint8_t* in, uint8_t const* in_max, int* err)
+{
+    return cbor_map_parse(in, in_max, this, err);
+}
+
+uint8_t* cdnsStorageParameter::parse_map_item(uint8_t* in, uint8_t const* in_max, int64_t val, int* err)
+{
+    switch (val) {
+    case 0:
+        in = cbor_parse_int64(in, in_max, &ticks_per_second, 0, err);
+        break;
+    case 1:
+        in = cbor_parse_int64(in, in_max, &max_block_items, 0, err);
+        break;
+    case 2:
+        in = storage_hints.parse(in, in_max, err);
+        break;
+    case 3:
+        in = cbor_array_parse(in, in_max, &opcodes, err);
+        break;
+    case 4:
+        in = cbor_array_parse(in, in_max, &rr_types, err);
+        break;
+    case 5:
+        in = cbor_parse_int64(in, in_max, &storage_flags, 0, err);
+        break;
+    case 6:
+        in = cbor_parse_int64(in, in_max, &client_address_prefix_ipv4, 0, err);
+        break;
+    case 7:
+        in = cbor_parse_int64(in, in_max, &client_address_prefix_ipv6, 0, err);
+        break;
+    case 8:
+        in = cbor_parse_int64(in, in_max, &server_address_prefix_ipv4, 0, err);
+        break;
+    case 9:
+        in = cbor_parse_int64(in, in_max, &server_address_prefix_ipv6, 0, err);
+        break;
+    case 10:
+        in = sampling_method.parse(in, in_max, err);
+        break;
+    case 11:
+        in = anonymization_method.parse(in, in_max, err);
+        break;
+
+    default:
+        in = cbor_skip(in, in_max, err);
+        break;
+    }
+
+    if (in == NULL) {
+        fprintf(stderr, "Cannot parse cdnsCollectionParameters %d, err=%d\n", (int)val, *err);
+    }
+    return in;
+}
+
+void cdnsStorageParameter::clear()
+{
+}
+
+cdnsCollectionParameters::cdnsCollectionParameters()
+{
+}
+
+cdnsCollectionParameters::~cdnsCollectionParameters()
+{
+}
+
+uint8_t* cdnsCollectionParameters::parse(uint8_t* in, uint8_t const* in_max, int* err)
+{
+    return cbor_map_parse(in, in_max, this, err);
+}
+
+uint8_t* cdnsCollectionParameters::parse_map_item(uint8_t* in, uint8_t const* in_max, int64_t val, int* err)
+{
+    switch (val) {
+    case 0:
+        in = cbor_parse_int64(in, in_max, &query_timeout, 0, err);
+        break;
+    case 1:
+        in = cbor_parse_int64(in, in_max, &skew_timeout, 0, err);
+        break;
+    case 2:
+        in = cbor_parse_int64(in, in_max, &snaplen, 0, err);
+        break;
+    case 3:
+        in = cbor_parse_boolean(in, in_max, &promisc, err); // Should be boolean 
+        break;
+    case 4:
+        in = cbor_array_parse(in, in_max, &interfaces, err);
+        break;
+    case 5:
+        in = cbor_array_parse(in, in_max, &server_addresses, err);
+        break;
+    case 6:
+        in = cbor_array_parse(in, in_max, &vlan_id, err);
+        break;
+    case 7:
+        in = filter.parse(in, in_max, err);
+    case 8:
+        in = generator_id.parse(in, in_max, err);
+        break;
+    case 9:
+        in = host_id.parse(in, in_max, err);
+        break;
+
+    default:
+        in = cbor_skip(in, in_max, err);
+        break;
+    }
+    
+    if (in == NULL) {
+        fprintf(stderr, "Cannot parse cdnsCollectionParameters %d, err=%d\n", (int)val, *err);
+    }
+    return in;
+}
+
+void cdnsCollectionParameters::clear()
+{
+}
+
+cdnsBlockParameterOld::cdnsBlockParameterOld():
+    query_timeout(0),
+    skew_timeout(0),
+    snaplen(0),
+    promisc(0),
+    query_options(0),
+    response_options(0),
+    max_block_qr_items(0),
+    collect_malformed(0)
+{
+}
+
+cdnsBlockParameterOld::~cdnsBlockParameterOld()
+{
+}
+
+uint8_t* cdnsBlockParameterOld::parse(uint8_t* in, uint8_t const* in_max, int* err)
+{
+    return cbor_map_parse(in, in_max, this, err);
+}
+
+uint8_t* cdnsBlockParameterOld::parse_map_item(uint8_t* in, uint8_t const* in_max, int64_t val, int* err)
+{
+    switch (val) {
+    case 0: 
+        in = cbor_parse_int64(in, in_max, &query_timeout, 0, err);
+        break;
+    case 1:
+        in = cbor_parse_int64(in, in_max, &skew_timeout, 0, err);
+        break;
+    case 2: 
+        in = cbor_parse_int64(in, in_max, &snaplen, 0, err);
+        break;
+    case 3:
+        in = cbor_parse_int64(in, in_max, &promisc, 0, err);
+        break;
+    case 4:
+        in = cbor_array_parse(in, in_max, &interfaces, err);
+        break;
+    case 5:
+        in = cbor_array_parse(in, in_max, &server_addresses, err);
+        break;
+    case 6:
+        in = cbor_array_parse(in, in_max, &vlan_id, err);
+        break;
+    case 7:
+        in = filter.parse(in, in_max, err);
+    case 8:
+        in = cbor_parse_int64(in, in_max, &query_options, 0, err);
+        break;
+    case 9:
+        in = cbor_parse_int64(in, in_max, &response_options, 0, err);
+        break;
+    case 10:
+        in = cbor_array_parse(in, in_max, &accept_rr_types, err);
+        break;
+    case 11:
+        in = cbor_array_parse(in, in_max, &ignore_rr_types, err);
+        break;
+    case 12:
+        in = cbor_parse_int64(in, in_max, &max_block_qr_items, 0, err);
+        break;
+    case 13:
+        in = cbor_parse_int64(in, in_max, &collect_malformed, 0, err);
+        break;
+    default:
+        in = cbor_skip(in, in_max, err);
+        break;
+    }
+    if (in == NULL) {
+        fprintf(stderr, "Cannot parse cdnsBlockParameterOld %d, err=%d\n", (int)val, *err);
+    }
+    return in;
+}
+
+void cdnsBlockParameterOld::clear()
+{
+}
+
+cdnsStorageHints::cdnsStorageHints():
+    query_response_hints(-1),
+    query_response_signature_hints(-1),
+    rr_hints(-1),
+    other_data_hints(-1)
+{
+}
+
+cdnsStorageHints::~cdnsStorageHints()
+{
+}
+
+uint8_t* cdnsStorageHints::parse(uint8_t* in, uint8_t const* in_max, int* err)
+{
+    return cbor_map_parse(in, in_max, this, err);
+}
+
+uint8_t* cdnsStorageHints::parse_map_item(uint8_t* in, uint8_t const* in_max, int64_t val, int* err)
+{
+    switch (val) {
+    case 0:
+        in = cbor_parse_int64(in, in_max, &query_response_hints, 0, err);
+        break;
+    case 1:
+        in = cbor_parse_int64(in, in_max, &query_response_signature_hints, 0, err);
+        break;
+    case 2:
+        in = cbor_parse_int64(in, in_max, &rr_hints, 0, err);
+        break;
+    case 3:
+        in = cbor_parse_int64(in, in_max, &other_data_hints, 0, err);
+        break;
+    default:
+        in = cbor_skip(in, in_max, err);
+        break;
+    }
+    if (in == NULL) {
+        fprintf(stderr, "Cannot parse cdnsStorageHints %d, err=%d\n", (int)val, *err);
+    }
+    return in;
+}
+
+void cdnsStorageHints::clear()
+{
+}
+
+cdns_response_processing_data::cdns_response_processing_data():
+    is_present(false),
+    bailiwick_index(0),
+    processing_flags(0)
+{
+}
+
+cdns_response_processing_data::~cdns_response_processing_data()
+{
+}
+
+uint8_t* cdns_response_processing_data::parse(uint8_t* in, uint8_t const* in_max, int* err)
+{
+    is_present = true;
+    return cbor_map_parse(in, in_max, this, err);
+}
+
+uint8_t* cdns_response_processing_data::parse_map_item(uint8_t* in, uint8_t const* in_max, int64_t val, int* err)
+{
+    switch (val) {
+    case 0:
+        in = cbor_parse_int(in, in_max, &bailiwick_index, 0, err);
+        break;
+    case 1:
+        in = cbor_parse_int(in, in_max, &processing_flags, 0, err);
+        break;
+    default:
+        in = cbor_skip(in, in_max, err);
+        break;
+    }
+    if (in == NULL) {
+        fprintf(stderr, "Cannot parse cdns_response_processing_data %d, err=%d\n", (int)val, *err);
+    }
+    return in;
+}
+
+void cdns_response_processing_data::clear()
+{
+    is_present = false;
+    bailiwick_index = 0;
+    processing_flags = 0;
 }

@@ -24,7 +24,7 @@
 #include "cdns.h"
 #include "cdns_test_class.h"
 
-class CdnsTest : public cdns_test_class
+class CdnsTest
 {
 public:
     CdnsTest();
@@ -35,6 +35,25 @@ public:
     static void SubmitQuery(cdns* cdns_ctx, size_t query_index, FILE* F);
 
     static bool FileCompare(char const* file_out, char const* file_ref);
+
+    bool DoTest(char const* test_in, char const* test_out, char const* test_ref);
+};
+
+class CdnsTestDraft : public cdns_test_class
+{
+public:
+    CdnsTestDraft();
+    ~CdnsTestDraft();
+
+    bool DoTest() override;
+};
+
+
+class CdnsTestRfc : public cdns_test_class
+{
+public:
+    CdnsTestRfc();
+    ~CdnsTestRfc();
 
     bool DoTest() override;
 };

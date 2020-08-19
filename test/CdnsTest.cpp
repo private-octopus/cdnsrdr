@@ -46,6 +46,7 @@ static char const* text_ref = "test/data/cdns_test_ref.txt";
 static char const* dump_out = "cdns_dump_file.txt";
 static char const* dump_rfc_out = "cdns_dump_rfc_file.txt";
 static char const* text_out = "cdns_test_file.txt";
+static char const* text_rfc_out = "cdns_test_rfc_file.txt";
 
 
 CdnsDumpTest::CdnsDumpTest()
@@ -113,8 +114,8 @@ void CdnsTest::SubmitQuery(cdns* cdns_ctx, size_t query_index, FILE * F)
     cdns_query* query = &cdns_ctx->block.queries[query_index];
     cdns_query_signature* q_sig = NULL;
 
-    if (query->query_signature_index >= CNDS_INDEX_OFFSET) {
-        q_sig = &cdns_ctx->block.tables.q_sigs[(size_t)query->query_signature_index - CNDS_INDEX_OFFSET];
+    if (query->query_signature_index >= cdns_ctx->index_offset) {
+        q_sig = &cdns_ctx->block.tables.q_sigs[(size_t)query->query_signature_index - cdns_ctx->index_offset];
     }
 
     fprintf(F, "Qsize: %d, rsize:%d",
@@ -133,7 +134,7 @@ void CdnsTest::SubmitQuery(cdns* cdns_ctx, size_t query_index, FILE * F)
                 query_time_usec, q_sig->query_opcode, q_sig->query_rcode, q_sig->qr_dns_flags);
 
             if (query->query_name_index > 0) {
-                size_t nid = (size_t)query->query_name_index - CNDS_INDEX_OFFSET;
+                size_t nid = (size_t)query->query_name_index - cdns_ctx->index_offset;
                 uint8_t* q_name = cdns_ctx->block.tables.name_rdata[nid].v;
                 size_t q_name_length = cdns_ctx->block.tables.name_rdata[nid].l;
 
@@ -150,11 +151,11 @@ void CdnsTest::SubmitQuery(cdns* cdns_ctx, size_t query_index, FILE * F)
             else {
                 fprintf(F, "name_index %d", query->query_name_index);
             }
-            if (q_sig->query_classtype_index > CNDS_INDEX_OFFSET) {
-                size_t cid = (size_t)q_sig->query_classtype_index - CNDS_INDEX_OFFSET;
+            if (q_sig->query_classtype_index > cdns_ctx->index_offset) {
+                size_t cid = (size_t)q_sig->query_classtype_index - cdns_ctx->index_offset;
                 fprintf(F, ", CL=%d, RR=%d", cdns_ctx->block.tables.class_ids[cid].rr_class, cdns_ctx->block.tables.class_ids[cid].rr_type);
             }
-            else if (q_sig->query_classtype_index != 1) {
+            else if (q_sig->query_classtype_index != cdns_ctx->index_offset) {
                 fprintf(F, ", classtype_index = %d", q_sig->query_classtype_index);
             }
         }
@@ -196,6 +197,7 @@ bool CdnsTest::FileCompare(char const* file_out, char const* file_ref)
                     TEST_LOG("File %s differs from %s at line %d\n", file_out, file_ref, nb_line);
                     TEST_LOG("    Got: %s", buffer1);
                     TEST_LOG("    Vs:  %s", buffer2);
+                    ret = false;
                 }
             }
         }
@@ -218,26 +220,26 @@ bool CdnsTest::FileCompare(char const* file_out, char const* file_ref)
     return ret;
 }
 
-bool CdnsTest::DoTest()
+bool CdnsTest::DoTest(char const * test_in, char const* test_out, char const * test_ref)
 {
     cdns cdns_ctx;
     int err;
     int nb_calls = 0;
-    bool ret = cdns_ctx.open(cbor_in);
+    bool ret = cdns_ctx.open(test_in);
 
     if (!ret) {
-        TEST_LOG("Could not open file: %s\n", cbor_in);
+        TEST_LOG("Could not open file: %s\n", test_in);
     }
     else {
-        FILE* F_out = cnds_file_open(text_out, "w");
+        FILE* F_out = cnds_file_open(test_out, "w");
 
         if (F_out == NULL) {
-            TEST_LOG("Could not open file: %s\n", text_out);
+            TEST_LOG("Could not open file: %s\n", test_out);
             ret = false;
         }
         else {
             fprintf(F_out, "Block start: %ld.%06ld\n",
-                cdns_ctx.block.preamble.earliest_time_sec, cdns_ctx.block.preamble.earliest_time_usec);
+                (long)cdns_ctx.block.preamble.earliest_time_sec, (long)cdns_ctx.block.preamble.earliest_time_usec);
             while (ret) {
                 nb_calls++;
                 ret = cdns_ctx.open_block(&err);
@@ -262,7 +264,7 @@ bool CdnsTest::DoTest()
     }
 
     if (ret) {
-        ret = FileCompare(text_out, text_ref);
+        ret = FileCompare(test_out, test_ref);
     }
 
     return ret;
@@ -289,3 +291,44 @@ bool CdnsRfcDumpTest::DoTest()
     return ret;
 }
 
+CdnsTestDraft::CdnsTestDraft()
+{
+}
+
+CdnsTestDraft::~CdnsTestDraft()
+{
+}
+
+bool CdnsTestDraft::DoTest()
+{
+    CdnsTest * test = new CdnsTest();
+    bool ret = false;
+    
+    if (test != NULL) {
+        ret = test->DoTest(cbor_in, text_out, text_ref);
+        delete test;
+    }
+
+    return ret;
+}
+
+CdnsTestRfc::CdnsTestRfc()
+{
+}
+
+CdnsTestRfc::~CdnsTestRfc()
+{
+}
+
+bool CdnsTestRfc::DoTest()
+{
+    CdnsTest* test = new CdnsTest();
+    bool ret = false;
+
+    if (test != NULL) {
+        ret = test->DoTest(cdns_in, text_rfc_out, text_ref);
+        delete test;
+    }
+
+    return ret;
+}
