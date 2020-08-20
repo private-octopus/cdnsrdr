@@ -480,8 +480,6 @@ public:
         return (preamble_parsed && preamble.cdns_version_major == 0);
     }
 
-    int index_offset;
-
     int64_t get_ticks_per_second(int64_t block_id);
 
     int64_t ticks_to_microseconds(int64_t ticks, int64_t block_id);
@@ -491,6 +489,8 @@ public:
 
 
     static uint8_t* dump_query(uint8_t* in, const uint8_t* in_max, char* out_buf, char* out_max, int cdns_version, int* err, FILE* F_out);
+
+    int index_offset;
 
 private:
     FILE* F;
