@@ -27,7 +27,6 @@
 #include "cdns.h"
 
 cdns::cdns():
-    index_offset(0),
     first_block_start_us(0),
     F(NULL),
     buf(NULL),
@@ -39,7 +38,8 @@ cdns::cdns():
     file_head_undef(false),
     block_list_undef(false),
     nb_blocks_present(0),
-    nb_blocks_read(0)
+    nb_blocks_read(0),
+    index_offset(0)
 {
 }
 
