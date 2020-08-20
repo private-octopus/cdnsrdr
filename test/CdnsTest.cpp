@@ -42,9 +42,9 @@ static char const* text_ref_rfc = "..\\..\\test\\data\\cdns_test_ref_rfc.txt";
 #endif
 #else
 static char const* cbor_in = "test/data/cdns_test_file.cbor";
-static char const* cdns_in = "test/data/cdns_test_file.cbor";
+static char const* cdns_in = "test/data/cdns_test_file.cdns";
 static char const* text_ref = "test/data/cdns_test_ref.txt";
-static char const* text_ref_rfc = "test/data/cdns_test_ref.txt";
+static char const* text_ref_rfc = "test/data/cdns_test_ref_rfc.txt";
 #endif
 static char const* dump_out = "cdns_dump_file.txt";
 static char const* dump_rfc_out = "cdns_dump_rfc_file.txt";
