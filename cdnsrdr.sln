@@ -6,6 +6,9 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "cdnsrdr", "cdnsrdr.vcxproj", "{AD7D59F8-1FBD-4BBB-8DE2-508C2B4F35C9}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "cdnstestapp", "cdnstestapp\cdnstestapp.vcxproj", "{75A9C104-7CDC-4DBF-8A0E-7F0EA0E0FDC1}"
+	ProjectSection(ProjectDependencies) = postProject
+		{AD7D59F8-1FBD-4BBB-8DE2-508C2B4F35C9} = {AD7D59F8-1FBD-4BBB-8DE2-508C2B4F35C9}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -58,6 +58,7 @@ uint8_t* cbor_skip(uint8_t* in, uint8_t const* in_max, int* err);
 
 uint8_t* cbor_parse_int(uint8_t* in, uint8_t const* in_max, int* v, int is_signed, int* err);
 uint8_t* cbor_parse_int64(uint8_t* in, uint8_t const* in_max, int64_t* v, int is_signed, int* err);
+uint8_t* cbor_parse_boolean(uint8_t* in, uint8_t const* in_max, bool *v, int* err);
 
 class cbor_bytes {
 public:
@@ -71,9 +72,27 @@ public:
     size_t l;
 };
 
+class cbor_text {
+public:
+    cbor_text();
+    cbor_text(const cbor_text& other);
+    ~cbor_text();
+
+    uint8_t* parse(uint8_t* in, uint8_t const* in_max, int* err);
+
+    char* v;
+    size_t l;
+};
+
 template <class ParsedClass> uint8_t* cbor_object_parse(uint8_t* in, uint8_t const* in_max, ParsedClass* v, int* err)
 {
     in = v->parse(in, in_max, err);
+    return in;
+}
+
+template <class ParsedClass, class CtxClass> uint8_t* cbor_object_ctx_parse(uint8_t* in, uint8_t const* in_max, ParsedClass* v, int* err, CtxClass* ctx)
+{
+    in = v->parse(in, in_max, err, ctx);
     return in;
 }
 
@@ -118,8 +137,53 @@ uint8_t* cbor_array_parse(uint8_t* in, uint8_t const* in_max, std::vector<InnerC
                 break;
             }
             else {
-                v->resize((size_t)rank + 1);
+                v->resize((size_t)rank + 1); 
                 in = cbor_object_parse(in, in_max, &(*v)[rank], err);
+                rank++;
+            }
+        }
+    }
+
+    return in;
+}
+
+/* cbor_ctx_array_parse:
+   same as cbor_array_parse, but also pass an additional context parameter
+   */
+template <class InnerClass, class CtxClass>
+uint8_t* cbor_ctx_array_parse(uint8_t* in, uint8_t const* in_max, std::vector<InnerClass>* v, int* err, CtxClass* ctx)
+{
+    int64_t val;
+    int outer_type = CBOR_CLASS(*in);
+    int is_undef = 0;
+
+    in = cbor_get_number(in, in_max, &val);
+
+    if (in == NULL || outer_type != CBOR_T_ARRAY) {
+        *err = CBOR_MALFORMED_VALUE;
+        in = NULL;
+    }
+    else {
+        int rank = 0;
+        if (val == CBOR_END_OF_ARRAY) {
+            is_undef = 1;
+            val = 0xffffffff;
+        }
+
+        while (rank < val && in != NULL && in < in_max) {
+            if (*in == 0xff) {
+                if (is_undef) {
+                    in++;
+                }
+                else {
+                    *err = CBOR_MALFORMED_VALUE;
+                    in = NULL;
+                }
+                break;
+            }
+            else {
+                v->resize((size_t)rank + 1);
+                in = cbor_object_ctx_parse(in, in_max, &(*v)[rank], err, ctx);
                 rank++;
             }
         }
@@ -172,11 +236,14 @@ uint8_t* cbor_map_parse(uint8_t* in, uint8_t const* in_max, InnerClass * v, int*
                 int64_t inner_val;
 
                 in = cbor_get_number(in, in_max, &inner_val);
-                if (inner_type != CBOR_T_UINT) {
+                if (in == NULL || (inner_type != CBOR_T_UINT && inner_type != CBOR_T_NINT)) {
                     *err = CBOR_MALFORMED_VALUE;
                     in = NULL;
                 }
                 else {
+                    if (inner_type == CBOR_T_NINT) {
+                        inner_val = -(inner_val + 1);
+                    }
                     in = v->parse_map_item(in, in_max, inner_val, err);
                     val--;
                 }
