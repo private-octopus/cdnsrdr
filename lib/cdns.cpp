@@ -1973,7 +1973,7 @@ uint8_t* cdns_query::parse(uint8_t* in, uint8_t const* in_max, int* err, cdnsBlo
     this->current_block = current_block;
     in = cbor_map_parse(in, in_max, this, err);
     if (!current_block->current_cdns->is_old_version()) {
-        time_offset_usec = current_block->current_cdns->ticks_to_microseconds(time_offset_usec, 
+        time_offset_usec = (int)current_block->current_cdns->ticks_to_microseconds(time_offset_usec, 
             current_block->preamble.block_parameter_index);
     }
     return in;
