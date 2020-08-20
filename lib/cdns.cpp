@@ -348,7 +348,7 @@ bool cdns::read_preamble(int * err)
             }
 
             if (in != NULL && in < in_max && *in != 0xff) {
-                /* Skip preamble -- to do, parse and store values  */
+                /* Parse preamble and store values  */
                 in = preamble.parse(in, in_max, err);
                 val--;
             }
@@ -1971,7 +1971,12 @@ cdns_query::~cdns_query()
 uint8_t* cdns_query::parse(uint8_t* in, uint8_t const* in_max, int* err, cdnsBlock* current_block)
 {
     this->current_block = current_block;
-    return cbor_map_parse(in, in_max, this, err);
+    in = cbor_map_parse(in, in_max, this, err);
+    if (!current_block->current_cdns->is_old_version()) {
+        time_offset_usec = current_block->current_cdns->ticks_to_microseconds(time_offset_usec, 
+            current_block->preamble.block_parameter_index);
+    }
+    return in;
 }
 
 uint8_t* cdns_query::parse_map_item(uint8_t* old_in, uint8_t const* in_max, int64_t val, int* err)
@@ -2201,61 +2206,63 @@ uint8_t* cdns_query_signature::parse_map_item(uint8_t* in, uint8_t const* in_max
     if (current_block->current_cdns->is_old_version()) {
         in = parse_map_item_old(in, in_max, val, err);
     }
-    switch (val) {
-    case 0: /*  server_address_index */
-        in = cbor_parse_int(in, in_max, &server_address_index, 0, err);
-        break;
-    case 1: /*  server_port */
-        in = cbor_parse_int(in, in_max, &server_port, 0, err);
-        break;
-    case 2: /*  transport_flags */
-        in = cbor_parse_int(in, in_max, &qr_transport_flags, 0, err);
-        break;
-    case 3: /* qr type */
-        in = cbor_parse_int(in, in_max, &qr_type, 0, err);
-        break;
-    case 4: /*  qr_sig_flags */
-        in = cbor_parse_int(in, in_max, &qr_sig_flags, 0, err);
-        break;
-    case 5: /*  query_opcode */
-        in = cbor_parse_int(in, in_max, &query_opcode, 0, err);
-        break;
-    case 6: /*  qr_dns_flags */
-        in = cbor_parse_int(in, in_max, &qr_dns_flags, 0, err);
-        break;
-    case 7: /*  query_rcode */
-        in = cbor_parse_int(in, in_max, &query_rcode, 0, err);
-        break;
-    case 8: /*  query_classtype_index */
-        in = cbor_parse_int(in, in_max, &query_classtype_index, 0, err);
-        break;
-    case 9: /*  query_qd_count */
-        in = cbor_parse_int(in, in_max, &query_qd_count, 0, err);
-        break;
-    case 10: /*  query_an_count */
-        in = cbor_parse_int(in, in_max, &query_an_count, 0, err);
-        break;
-    case 11: /*  query_ns_count */
-        in = cbor_parse_int(in, in_max, &query_ns_count, 0, err);
-        break;
-    case 12: /*  query_ar_count */
-        in = cbor_parse_int(in, in_max, &query_ar_count, 0, err);
-        break;
-    case 13: /*  edns_version */
-        in = cbor_parse_int(in, in_max, &edns_version, 0, err);
-        break;
-    case 14: /*  udp_buf_size */
-        in = cbor_parse_int(in, in_max, &udp_buf_size, 0, err);
-        break;
-    case 15: /*  opt_rdata_index */
-        in = cbor_parse_int(in, in_max, &opt_rdata_index, 0, err);
-        break;
-    case 16: /*  response_rcode */
-        in = cbor_parse_int(in, in_max, &response_rcode, 0, err);
-        break;
-    default:
-        in = cbor_skip(in, in_max, err);
-        break;
+    else {
+        switch (val) {
+        case 0: /*  server_address_index */
+            in = cbor_parse_int(in, in_max, &server_address_index, 0, err);
+            break;
+        case 1: /*  server_port */
+            in = cbor_parse_int(in, in_max, &server_port, 0, err);
+            break;
+        case 2: /*  transport_flags */
+            in = cbor_parse_int(in, in_max, &qr_transport_flags, 0, err);
+            break;
+        case 3: /* qr type */
+            in = cbor_parse_int(in, in_max, &qr_type, 0, err);
+            break;
+        case 4: /*  qr_sig_flags */
+            in = cbor_parse_int(in, in_max, &qr_sig_flags, 0, err);
+            break;
+        case 5: /*  query_opcode */
+            in = cbor_parse_int(in, in_max, &query_opcode, 0, err);
+            break;
+        case 6: /*  qr_dns_flags */
+            in = cbor_parse_int(in, in_max, &qr_dns_flags, 0, err);
+            break;
+        case 7: /*  query_rcode */
+            in = cbor_parse_int(in, in_max, &query_rcode, 0, err);
+            break;
+        case 8: /*  query_classtype_index */
+            in = cbor_parse_int(in, in_max, &query_classtype_index, 0, err);
+            break;
+        case 9: /*  query_qd_count */
+            in = cbor_parse_int(in, in_max, &query_qd_count, 0, err);
+            break;
+        case 10: /*  query_an_count */
+            in = cbor_parse_int(in, in_max, &query_an_count, 0, err);
+            break;
+        case 11: /*  query_ns_count */
+            in = cbor_parse_int(in, in_max, &query_ns_count, 0, err);
+            break;
+        case 12: /*  query_ar_count */
+            in = cbor_parse_int(in, in_max, &query_ar_count, 0, err);
+            break;
+        case 13: /*  edns_version */
+            in = cbor_parse_int(in, in_max, &edns_version, 0, err);
+            break;
+        case 14: /*  udp_buf_size */
+            in = cbor_parse_int(in, in_max, &udp_buf_size, 0, err);
+            break;
+        case 15: /*  opt_rdata_index */
+            in = cbor_parse_int(in, in_max, &opt_rdata_index, 0, err);
+            break;
+        case 16: /*  response_rcode */
+            in = cbor_parse_int(in, in_max, &response_rcode, 0, err);
+            break;
+        default:
+            in = cbor_skip(in, in_max, err);
+            break;
+        }
     }
     return in;
 }
@@ -2658,26 +2665,27 @@ uint8_t* cdns_address_event_count::parse_map_item(uint8_t* in, uint8_t const* in
     if (current_block->current_cdns->is_old_version()) {
         in = parse_map_item_old(in, in_max, val, err);
     }
-    switch (val) {
-    case 0: // ae_type
-        in = cbor_parse_int(in, in_max, &ae_type, 1, err);
-        break;
-    case 1: // ae_code,
-        in = cbor_parse_int(in, in_max, &ae_code, 1, err);
-        break;
-    case 2: // ae_transport_flags,
-        in = cbor_parse_int(in, in_max, &ae_transport_flags, 1, err);
-        break;
-    case 3: // ae_address_index,
-        in = cbor_parse_int(in, in_max, &ae_address_index, 1, err);
-        break;
-    case 4: // ae_count
-        in = cbor_parse_int(in, in_max, &ae_count, 1, err);
-        break;
-    default:
-        in = cbor_skip(in, in_max, err);
+    else {
+        switch (val) {
+        case 0: // ae_type
+            in = cbor_parse_int(in, in_max, &ae_type, 1, err);
+            break;
+        case 1: // ae_code,
+            in = cbor_parse_int(in, in_max, &ae_code, 1, err);
+            break;
+        case 2: // ae_transport_flags,
+            in = cbor_parse_int(in, in_max, &ae_transport_flags, 1, err);
+            break;
+        case 3: // ae_address_index,
+            in = cbor_parse_int(in, in_max, &ae_address_index, 1, err);
+            break;
+        case 4: // ae_count
+            in = cbor_parse_int(in, in_max, &ae_count, 1, err);
+            break;
+        default:
+            in = cbor_skip(in, in_max, err);
+        }
     }
-
     return in;
 }
 
@@ -2787,7 +2795,7 @@ uint8_t* cdnsPreamble::parse_map_item(uint8_t* in, uint8_t const* in_max, int64_
             in = cbor_array_parse(in, in_max, &block_parameters, err);
         }
         else {
-            in = cbor_array_parse(in, in_max, &old_block_parameters, err);
+            in = old_block_parameters.parse(in, in_max, err);
         }
         break;
     case 4: /* generator-id  -- only present in draft version, part of
@@ -2994,21 +3002,22 @@ uint8_t* cdnsBlockParameterOld::parse_map_item(uint8_t* in, uint8_t const* in_ma
     case 5:
         in = cbor_array_parse(in, in_max, &server_addresses, err);
         break;
-    case 6:
+    /*case 6:
         in = cbor_array_parse(in, in_max, &vlan_id, err);
+        break; */
+    case 6:
+        in = filter.parse(in, in_max, err);
         break;
     case 7:
-        in = filter.parse(in, in_max, err);
-    case 8:
         in = cbor_parse_int64(in, in_max, &query_options, 0, err);
         break;
-    case 9:
+    case 8:
         in = cbor_parse_int64(in, in_max, &response_options, 0, err);
         break;
-    case 10:
+    case 9:
         in = cbor_array_parse(in, in_max, &accept_rr_types, err);
         break;
-    case 11:
+    case 10:
         in = cbor_array_parse(in, in_max, &ignore_rr_types, err);
         break;
     case 12:

@@ -417,7 +417,7 @@ public:
     int64_t promisc;
     std::vector<cbor_bytes> interfaces;
     std::vector<cbor_bytes> server_addresses;
-    std::vector<cbor_bytes> vlan_id;
+    /* std::vector<cbor_bytes> vlan_id; */ /* This is specified by the spec, but does not seem to be actually encoded */
     cbor_text filter;
     int64_t query_options;
     int64_t response_options;
@@ -444,7 +444,7 @@ public:
     int64_t cdns_version_minor;
     int64_t cdns_version_private;
     std::vector<cdnsBlockParameter> block_parameters;
-    std::vector<cdnsBlockParameterOld> old_block_parameters;
+    cdnsBlockParameterOld old_block_parameters;
     cbor_text generator_id;
     cbor_text host_id;
 };
