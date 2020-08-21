@@ -55,7 +55,7 @@ or alternatively read the properties `cdns.preamble.cdns_version_major` and `cdn
 for old encodings, 0 for new encodings.
 * Use the properties `preamble.old_block_parameters`, `old_generator_id` and `old_host_id` when looking at properties of an old encoding,
 instead of looking at `preamble.block_parameters[]` for new encodings.
-* Use a set of helper methods in the `cdns_query_signature` object to access the value of ip protocol, transport protocol, the
+* Use a set of helper methods in the `cdns_query_signature` object to access the value of ip protocol, transport protocol,
 and the presence of trailing bytes in a version independent manner instead of directly accessing the `qr_transport_flags` property.
 * Use another set of helper methods in the `cdns_query_signature` object to access the presence or absence of query, response or OPT
 records in a version independent manner instead of directly accessing the `qr_sig_flags` property.
