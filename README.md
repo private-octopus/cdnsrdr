@@ -10,7 +10,6 @@ The standard version of C-DNS is defined in [RFC 8618](https://tools.ietf.org/ht
 For historical reasons, the current
 CDNSRDR code supports both encodings based on that version and 
 those based on [C-DNS draft-04](https://datatracker.ietf.org/doc/draft-ietf-dnsop-dns-capture-format/04/).
-We plan on supporting the final RFC 8618 format very soon.
 
 In a typical case, the application will open a CDNS file, and then successively read the blocks contained in the file,
 so that only one CDNS block is loaded in memory at a given time. Once a block is read in memory, the application
