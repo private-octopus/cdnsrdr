@@ -2194,6 +2194,82 @@ cdns_query_signature::~cdns_query_signature()
 {
 }
 
+cdns_ip_protocol_enum cdns_query_signature::ip_protocol()
+{
+    if (current_block->current_cdns->is_old_version()) {
+        return (cdns_ip_protocol_enum)((qr_transport_flags>>1) & 1);
+    }
+    else {
+        return (cdns_ip_protocol_enum)(qr_transport_flags & 1);
+    }
+}
+
+cdns_transport_protocol_enum cdns_query_signature::transport_protocol()
+{
+    if (current_block->current_cdns->is_old_version()) {
+        return (cdns_transport_protocol_enum)(qr_transport_flags & 1);
+    }
+    else {
+        return (cdns_transport_protocol_enum)((qr_transport_flags >> 1) & 0xF);
+    }
+}
+
+bool cdns_query_signature::has_trailing_bytes()
+{
+    if (current_block->current_cdns->is_old_version()) {
+        return ((qr_transport_flags & 4) != 0);
+    }
+    else {
+        return ((qr_transport_flags & 32) != 0);
+    }
+}
+
+bool cdns_query_signature::is_query_present()
+{
+    return ((qr_sig_flags & 1) != 0);
+}
+
+bool cdns_query_signature::is_response_present()
+{
+    return ((qr_sig_flags & 2) != 0);
+}
+
+bool cdns_query_signature::is_query_present_with_OPT()
+{
+    if (current_block->current_cdns->is_old_version()) {
+        return ((qr_sig_flags & 8) != 0);
+    }
+    else {
+        return ((qr_sig_flags & 4) != 0);
+    }
+}
+
+bool cdns_query_signature::is_response_present_with_OPT()
+{
+    if (current_block->current_cdns->is_old_version()) {
+        return ((qr_sig_flags & 16) != 0);
+    }
+    else {
+        return ((qr_sig_flags & 8) != 0);
+    }
+}
+
+bool cdns_query_signature::is_query_present_with_no_question()
+{
+    if (current_block->current_cdns->is_old_version()) {
+        /* This flag is not defined in the old version, so we just take a guess */
+        return is_response_present_with_no_question();
+    }
+    else {
+        return ((qr_sig_flags & 16) != 0);
+    }
+}
+
+bool cdns_query_signature::is_response_present_with_no_question()
+{
+    return ((qr_sig_flags & 32) != 0);
+}
+
 uint8_t* cdns_query_signature::parse(uint8_t* in, uint8_t const* in_max, int* err, cdnsBlock* current_block)
 {
     this->current_block = current_block;
@@ -2800,11 +2876,11 @@ uint8_t* cdnsPreamble::parse_map_item(uint8_t* in, uint8_t const* in_max, int64_
         break;
     case 4: /* generator-id  -- only present in draft version, part of
              * block parameter collection data otherwise. */
-        in = generator_id.parse(in, in_max, err);
+        in = old_generator_id.parse(in, in_max, err);
         break;
     case 5: /* host-id   -- only present in draft version, part of
              * block parameter collection data otherwise. */
-        in = host_id.parse(in, in_max, err);
+        in = old_host_id.parse(in, in_max, err);
         break;
     default:
         in = cbor_skip(in, in_max, err);

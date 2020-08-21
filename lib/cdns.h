@@ -180,10 +180,35 @@ public:
     int rr_class;
 };
 
+typedef enum {
+    ipv4 = 0,
+    ipv6 = 1
+} cdns_ip_protocol_enum;
+
+typedef enum {
+    udp=0,
+    tcp=1,
+    tls=2,
+    dtls=3,
+    https=4,
+    non_standard=15
+} cdns_transport_protocol_enum;
+
 class cdns_query_signature {
 public:
     cdns_query_signature();
     ~cdns_query_signature();
+
+    cdns_ip_protocol_enum ip_protocol();
+    cdns_transport_protocol_enum transport_protocol();
+    bool has_trailing_bytes();
+
+    bool is_query_present();
+    bool is_response_present();
+    bool is_query_present_with_OPT();
+    bool is_response_present_with_OPT();
+    bool is_query_present_with_no_question();
+    bool is_response_present_with_no_question();
 
     uint8_t* parse(uint8_t* in, uint8_t const* in_max, int* err, cdnsBlock* current_block);
 
@@ -445,8 +470,8 @@ public:
     int64_t cdns_version_private;
     std::vector<cdnsBlockParameter> block_parameters;
     cdnsBlockParameterOld old_block_parameters;
-    cbor_text generator_id;
-    cbor_text host_id;
+    cbor_text old_generator_id;
+    cbor_text old_host_id;
 };
 
 
@@ -464,9 +489,6 @@ public:
     bool dump(char const* file_out);
 
     bool open_block(int* err);
-
-    cdnsBlock block; /* Current block */
-    uint64_t first_block_start_us;
 
     bool is_first_block() {
         return nb_blocks_read == 1;
@@ -490,6 +512,9 @@ public:
 
     static uint8_t* dump_query(uint8_t* in, const uint8_t* in_max, char* out_buf, char* out_max, int cdns_version, int* err, FILE* F_out);
 
+    cdnsPreamble preamble;
+    cdnsBlock block; /* Current block */
+    uint64_t first_block_start_us;
     int index_offset;
 
 private:
@@ -504,7 +529,6 @@ private:
     bool block_list_undef;
     int64_t nb_blocks_present;
     int64_t nb_blocks_read;
-    cdnsPreamble preamble;
 
     bool load_entire_file();
     bool read_preamble(int* err); /* Leaves nb_read pointing to the beginning of the 1st block */

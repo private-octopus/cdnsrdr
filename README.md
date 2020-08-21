@@ -8,7 +8,8 @@ This project builds a small library including:
 
 The standard version of C-DNS is defined in [RFC 8618](https://tools.ietf.org/html/rfc8618). 
 For historical reasons, the current
-CDNSRDR code is based on [C-DNS draft-04](https://datatracker.ietf.org/doc/draft-ietf-dnsop-dns-capture-format/04/).
+CDNSRDR code supports both encodings based on that version and 
+those based on [C-DNS draft-04](https://datatracker.ietf.org/doc/draft-ietf-dnsop-dns-capture-format/04/).
 We plan on supporting the final RFC 8618 format very soon.
 
 In a typical case, the application will open a CDNS file, and then successively read the blocks contained in the file,
@@ -36,6 +37,29 @@ can process its elements. For example, an application that processes the recorde
 ~~~
 
 The CDNSRDR library was initially developed as part of the [ITHITOOLS project](https://github.com/private-octopus/ithitools/).
+
+## API differences between RFC 8618 and draft version
+
+The CDNS format definition evolved between the draft 04 on which the draft version was based and the version published
+in RFC 8618. Simple coding differences such as use of different indices in CBOR maps are easy to handle during parsing, but
+semantic differences are harder. The main differences are:
+
+* Different way to represent default values in the "file preamble",
+* Indexing of tables from 1 to N in the draft version, from 0 to N-1 in the RFC version,
+* Different formats for the "transport flags" and "signature flags" in the query signature table.
+
+Applications that use both formats need to be aware of these differences. Developers should:
+ 
+* Use the function `cdns.is_old_version()` to check whether the current object was encoded using the old or the new version,
+or alternatively read the properties `cdns.preamble.cdns_version_major` and `cdns.preamble.cdns_version_minor`.
+* when accessing indexed table elements, shift the index by the value `cdns.index_offset`. This value is set to 1
+for old encodings, 0 for new encodings.
+* Use the properties `preamble.old_block_parameters`, `old_generator_id` and `old_host_id` when looking at properties of an old encoding,
+instead of looking at `preamble.block_parameters[]` for new encodings.
+* Use a set of helper methods in the `cdns_query_signature` object to access the value of ip protocol, transport protocol, the
+and the presence of trailing bytes in a version independent manner instead of directly accessing the `qr_transport_flags` property.
+* Use another set of helper methods in the `cdns_query_signature` object to access the presence or absence of query, response or OPT
+records in a version independent manner instead of directly accessing the `qr_sig_flags` property.
 
 # Building CDNSRDR
 
