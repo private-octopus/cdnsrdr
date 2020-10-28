@@ -2966,7 +2966,7 @@ uint8_t* cdnsStorageParameter::parse_map_item(uint8_t* in, uint8_t const* in_max
     }
 
     if (in == NULL) {
-        fprintf(stderr, "Cannot parse cdnsCollectionParameters %d, err=%d\n", (int)val, *err);
+        fprintf(stderr, "Cannot parse cdnsStorageParameters %d, err=%d\n", (int)val, *err);
     }
     return in;
 }
