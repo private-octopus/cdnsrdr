@@ -398,7 +398,7 @@ public:
     int64_t skew_timeout;
     int64_t snaplen;
     bool promisc;
-    std::vector<cbor_bytes> interfaces;
+    std::vector<cbor_text> interfaces;
     std::vector<cbor_bytes> server_addresses;
     std::vector<int> vlan_id;
     cbor_text filter;
