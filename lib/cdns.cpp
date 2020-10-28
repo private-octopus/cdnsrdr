@@ -3014,6 +3014,7 @@ uint8_t* cdnsCollectionParameters::parse_map_item(uint8_t* in, uint8_t const* in
         break;
     case 7:
         in = filter.parse(in, in_max, err);
+        break;
     case 8:
         in = generator_id.parse(in, in_max, err);
         break;
