@@ -378,8 +378,8 @@ public:
     int64_t client_address_prefix_ipv6;
     int64_t server_address_prefix_ipv4;
     int64_t server_address_prefix_ipv6;
-    cbor_bytes sampling_method;
-    cbor_bytes anonymization_method;
+    cbor_text sampling_method;
+    cbor_text anonymization_method;
 };
 
 class cdnsCollectionParameters
