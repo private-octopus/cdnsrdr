@@ -12,8 +12,10 @@ enum test_list_enum {
     test_enum_cbor_skip,
     test_enum_cdns,
     test_enum_cdns_rfc,
+    test_enum_cdns_gold,
     test_enum_cdns_dump,
     test_enum_cdns_rfc_dump,
+    test_enum_gold_dump,
     test_enum_max_number
 };
 
@@ -41,10 +43,14 @@ char const * cdns_test_class::GetTestName(int number)
         return("cdns_draft");
     case test_enum_cdns_rfc:
         return("cdns_rfc");
+    case test_enum_cdns_gold:
+        return("cdns_gold");
     case test_enum_cdns_dump:
         return("cdns_dump");
     case test_enum_cdns_rfc_dump:
         return("cdns_rfc_dump");
+    case test_enum_gold_dump:
+        return("gold_dump");
     default:
         break;
     }
@@ -84,11 +90,17 @@ cdns_test_class * cdns_test_class::TestByNumber(int number)
     case test_enum_cdns_rfc:
         test = new CdnsTestRfc();
         break;
+    case test_enum_cdns_gold:
+        test = new CdnsTestGold();
+        break;
     case test_enum_cdns_dump:
         test = new CdnsDumpTest();
         break;
     case test_enum_cdns_rfc_dump:
         test = new CdnsRfcDumpTest();
+        break;
+    case test_enum_gold_dump:
+        test = new CdnsGoldDumpTest();
         break;
     default:
         break;

@@ -32,24 +32,32 @@
 #ifndef _WINDOWS64
 static char const* cbor_in = "..\\test\\data\\cdns_test_file.cbor";
 static char const* cdns_in = "..\\test\\data\\cdns_test_file.cdns";
+static char const* gold_in = "..\\test\\data\\gold.cbor";
 static char const* text_ref = "..\\test\\data\\cdns_test_ref.txt";
 static char const* text_ref_rfc = "..\\test\\data\\cdns_test_ref_rfc.txt";
+static char const* text_ref_gold = "..\\test\\data\\cdns_test_ref_gold.txt";
 #else
 static char const* cbor_in = "..\\..\\test\\data\\cdns_test_file.cbor";
 static char const* cdns_in = "..\\..\\test\\data\\cdns_test_file.cdns";
+static char const* gold_in = "..\\..\\test\\data\\gold.cbor";
 static char const* text_ref = "..\\..\\test\\data\\cdns_test_ref.txt";
 static char const* text_ref_rfc = "..\\..\\test\\data\\cdns_test_ref_rfc.txt";
+static char const* text_ref_gold = "..\\..\\test\\data\\cdns_test_ref_gold.txt";
 #endif
 #else
 static char const* cbor_in = "test/data/cdns_test_file.cbor";
 static char const* cdns_in = "test/data/cdns_test_file.cdns";
+static char const* gold_in = "test/data/gold.cbor";
 static char const* text_ref = "test/data/cdns_test_ref.txt";
 static char const* text_ref_rfc = "test/data/cdns_test_ref_rfc.txt";
+static char const* text_ref_gold = "test/data/cdns_test_ref_gold.txt";
 #endif
 static char const* dump_out = "cdns_dump_file.txt";
 static char const* dump_rfc_out = "cdns_dump_rfc_file.txt";
+static char const* dump_gold_out = "gold_dump_file.txt";
 static char const* text_out = "cdns_test_file.txt";
 static char const* text_rfc_out = "cdns_test_rfc_file.txt";
+static char const* text_gold_out = "cdns_test_gold_file.txt";
 
 
 CdnsDumpTest::CdnsDumpTest()
@@ -136,7 +144,7 @@ void CdnsTest::SubmitQuery(cdns* cdns_ctx, size_t query_index, FILE * F)
             fprintf(F, "t: %" PRIu64 ", op: %d, r: %d, flags: %x, ",
                 query_time_usec, q_sig->query_opcode, q_sig->query_rcode, q_sig->qr_dns_flags);
 
-            if (query->query_name_index > 0) {
+            if (query->query_name_index >= cdns_ctx->index_offset) {
                 size_t nid = (size_t)query->query_name_index - cdns_ctx->index_offset;
                 uint8_t* q_name = cdns_ctx->block.tables.name_rdata[nid].v;
                 size_t q_name_length = cdns_ctx->block.tables.name_rdata[nid].l;
@@ -154,7 +162,7 @@ void CdnsTest::SubmitQuery(cdns* cdns_ctx, size_t query_index, FILE * F)
             else {
                 fprintf(F, "name_index %d", query->query_name_index);
             }
-            if (q_sig->query_classtype_index > cdns_ctx->index_offset) {
+            if (q_sig->query_classtype_index >= cdns_ctx->index_offset) {
                 size_t cid = (size_t)q_sig->query_classtype_index - cdns_ctx->index_offset;
                 fprintf(F, ", CL=%d, RR=%d", cdns_ctx->block.tables.class_ids[cid].rr_class, cdns_ctx->block.tables.class_ids[cid].rr_type);
             }
@@ -166,6 +174,126 @@ void CdnsTest::SubmitQuery(cdns* cdns_ctx, size_t query_index, FILE * F)
             fprintf(F, "response only.");
         }
         fprintf(F, "\n");
+    }
+}
+
+void CdnsTest::SubmitPreamble(FILE* F_out, cdns* cdns_ctx)
+{
+    fprintf(F_out, "Version: %" PRId64 ".%" PRId64 ".%" PRId64 "\n",
+        cdns_ctx->preamble.cdns_version_major,
+        cdns_ctx->preamble.cdns_version_minor,
+        cdns_ctx->preamble.cdns_version_private);
+    if (cdns_ctx->preamble.cdns_version_major >= 1) {
+        for (size_t i = 0; i < cdns_ctx->preamble.block_parameters.size(); i++) {
+            fprintf(F_out, "Block parameters[%zu]\n", i);
+            SubmitStorageParameter(F_out, &cdns_ctx->preamble.block_parameters[i].storage);
+            SubmitCollectionParameters(F_out, &cdns_ctx->preamble.block_parameters[i].collection);
+        }
+    }
+    else {
+        if (cdns_ctx->preamble.old_generator_id.l > 0) {
+            fprintf(F_out, "GeneratorId: ");
+            PrintText(F_out, &cdns_ctx->preamble.old_generator_id);
+            fprintf(F_out, "\n");
+        }
+        if (cdns_ctx->preamble.old_host_id.l > 0) {
+            fprintf(F_out, "HostId: ");
+            PrintText(F_out, &cdns_ctx->preamble.old_host_id);
+            fprintf(F_out, "\n");
+        }
+    }
+}
+
+void CdnsTest::SubmitStorageParameter(FILE* F_out, cdnsStorageParameter* storage)
+{
+    fprintf(F_out, "    Storage parameters:\n");
+    fprintf(F_out, "        TicksPerSecond: %" PRId64 "\n", storage->ticks_per_second);
+    fprintf(F_out, "        MaxBlockItems: %" PRId64 "\n", storage->max_block_items);
+    fprintf(F_out, "        StorageHints:\n");
+    fprintf(F_out, "            QRHints: %" PRId64 "\n", storage->storage_hints.query_response_hints);
+    fprintf(F_out, "            QRSignatureHints: % " PRId64 "\n", storage->storage_hints.query_response_signature_hints);
+    fprintf(F_out, "            RRHints: %" PRId64 "\n", storage->storage_hints.rr_hints);
+    fprintf(F_out, "            OtherDataHints: %" PRId64 "\n", storage->storage_hints.other_data_hints);
+    fprintf(F_out, "        MaxBlockItems: % " PRId64 "\n", storage->max_block_items);
+    if (storage->opcodes.size() > 0) {
+        fprintf(F_out, "        OpCodes: ");
+        PrintIntVector(F_out, &storage->opcodes);
+        fprintf(F_out, "\n");
+    }
+    if (storage->rr_types.size() > 0) {
+        fprintf(F_out, "        RRTypes: ");
+        PrintIntVector(F_out, &storage->rr_types);
+        fprintf(F_out, "\n");
+    }
+    if (storage->storage_flags != 0) {
+        fprintf(F_out, "        StorageFlags: 0x%" PRIx64 "\n", storage->storage_flags);
+    }
+    if (storage->client_address_prefix_ipv4 != 0) {
+        fprintf(F_out, "        ClientAddressPrefixIpv4: %" PRId64 "\n", storage->client_address_prefix_ipv4);
+    }
+    if (storage->client_address_prefix_ipv6 != 0) {
+        fprintf(F_out, "        ClientAddressPrefixIpv6: %" PRId64 "\n", storage->client_address_prefix_ipv6);
+    }
+    if (storage->server_address_prefix_ipv4 != 0) {
+        fprintf(F_out, "        ServerAddressPrefixIpv4: %" PRId64 "\n", storage->server_address_prefix_ipv4);
+    }
+    if (storage->server_address_prefix_ipv6 != 0) {
+        fprintf(F_out, "        ServerAddressPrefixIpv6: %" PRId64 "\n", storage->server_address_prefix_ipv6);
+    }
+    if (storage->sampling_method.l > 0) {
+        fprintf(F_out, "        SamplingMethod: ");
+        PrintText(F_out, &storage->sampling_method);
+        fprintf(F_out, "\n");
+    }
+    if (storage->anonymization_method.l > 0) {
+        fprintf(F_out, "        AnonymizationMethod: ");
+        PrintText(F_out, &storage->anonymization_method);
+        fprintf(F_out, "\n");
+    }
+}
+
+void CdnsTest::SubmitCollectionParameters(FILE* F_out, cdnsCollectionParameters* collection)
+{
+    fprintf(F_out, "    Collection parameters:\n");
+    fprintf(F_out, "        QueryTimeout: %" PRId64 "\n", collection->query_timeout);
+    fprintf(F_out, "        SkewTimeout: %" PRId64 "\n", collection->skew_timeout);
+    fprintf(F_out, "        SnapLen: %" PRId64 "\n", collection->snaplen);
+    fprintf(F_out, "        Promisc: %s\n", (collection->promisc) ? "true" : "false");
+    if (collection->interfaces.size() > 0) {
+        fprintf(F_out, "        Interfaces: ");
+        PrintTextVector(F_out, &collection->interfaces);
+        fprintf(F_out, "\n");
+    }
+    if (collection->server_addresses.size() > 0) {
+        fprintf(F_out, "        ServerAddresses: ");
+        PrintBytesVector(F_out, &collection->server_addresses);
+        fprintf(F_out, "\n");
+    }
+    if (collection->vlan_id.size() > 0) {
+        fprintf(F_out, "        Vlan_id: ");
+        PrintIntVector(F_out, &collection->vlan_id);
+        fprintf(F_out, "\n");
+    }
+    if (collection->filter.l > 0) {
+        fprintf(F_out, "        Filter: ");
+        PrintText(F_out, &collection->filter);
+        fprintf(F_out, "\n");
+    }
+    if (collection->query_options != 0) {
+        fprintf(F_out, "        QueryOptions: 0x%" PRIx64 "\n", collection->query_options);
+    }
+    if (collection->response_options != 0) {
+        fprintf(F_out, "        ResponseOptions: 0x%" PRIx64 "\n", collection->response_options);
+    }
+    if (collection->generator_id.l > 0) {
+        fprintf(F_out, "        GeneratorId: ");
+        PrintText(F_out, &collection->generator_id);
+        fprintf(F_out, "\n");
+    }
+    if (collection->host_id.l > 0) {
+        fprintf(F_out, "        HostId: ");
+        PrintText(F_out, &collection->host_id);
+        fprintf(F_out, "\n");
     }
 }
 
@@ -185,8 +313,6 @@ bool CdnsTest::FileCompare(char const* file_out, char const* file_ref)
         ret = false;
     }
     else {
-
-
         while (ret && fgets(buffer1, sizeof(buffer1), F1) != NULL) {
             nb_line++;
             if (fgets(buffer2, sizeof(buffer2), F2) == NULL) {
@@ -236,11 +362,16 @@ bool CdnsTest::DoTest(char const * test_in, char const* test_out, char const * t
     else {
         FILE* F_out = cnds_file_open(test_out, "w");
 
+
         if (F_out == NULL) {
             TEST_LOG("Could not open file: %s\n", test_out);
             ret = false;
         }
         else {
+            ret = cdns_ctx.read_preamble(&err);
+
+            SubmitPreamble(F_out, &cdns_ctx);
+
             fprintf(F_out, "Block start: %ld.%06ld\n",
                 (long)cdns_ctx.block.preamble.earliest_time_sec, (long)cdns_ctx.block.preamble.earliest_time_usec);
             while (ret) {
@@ -271,6 +402,57 @@ bool CdnsTest::DoTest(char const * test_in, char const* test_out, char const * t
     }
 
     return ret;
+}
+
+void CdnsTest::PrintIntVector(FILE* F_out, std::vector<int>* v_int)
+{
+    fprintf(F_out, "[");
+    for (size_t i = 0; i < v_int->size(); i++) {
+        if (i != 0) {
+            fprintf(F_out, ", ");
+        }
+        fprintf(F_out, "%d", (*v_int)[i]);
+    }
+    fprintf(F_out, "]");
+}
+
+void CdnsTest::PrintTextVector(FILE* F_out, std::vector<cbor_text>* v_text)
+{
+    fprintf(F_out, "[");
+    for (size_t i = 0; i < v_text->size(); i++) {
+        if (i != 0) {
+            fprintf(F_out, ", ");
+        }
+        CdnsTest::PrintText(F_out, &(*v_text)[i]);
+    }
+    fprintf(F_out, "]");
+}
+
+void CdnsTest::PrintBytesVector(FILE* F_out, std::vector<cbor_bytes>* v_bytes)
+{
+    fprintf(F_out, "[");
+    for (size_t i = 0; i < v_bytes->size(); i++) {
+        if (i != 0) {
+            fprintf(F_out, ", ");
+        }
+        CdnsTest::PrintBytes(F_out, &(*v_bytes)[i]);
+    }
+    fprintf(F_out, "]");
+}
+
+void CdnsTest::PrintText(FILE* F_out, cbor_text* p_text)
+{
+    for (size_t i = 0; i < p_text->l; i++) {
+        fputc(p_text->v[i], F_out);
+    }
+}
+
+void CdnsTest::PrintBytes(FILE* F_out, cbor_bytes* p_bytes)
+{
+    fprintf(F_out, "0x");
+    for (size_t i = 0; i < p_bytes->l; i++) {
+        fprintf(F_out, "%02x", p_bytes->v[i]);
+    }
 }
 
 
@@ -330,6 +512,47 @@ bool CdnsTestRfc::DoTest()
 
     if (test != NULL) {
         ret = test->DoTest(cdns_in, text_rfc_out, text_ref_rfc);
+        delete test;
+    }
+
+    return ret;
+}
+
+CdnsGoldDumpTest::CdnsGoldDumpTest()
+{
+}
+
+CdnsGoldDumpTest::~CdnsGoldDumpTest()
+{
+}
+
+bool CdnsGoldDumpTest::DoTest()
+{
+    cdns cap_cbor;
+    bool ret = cap_cbor.open(gold_in);
+
+    if (ret) {
+        ret = cap_cbor.dump(dump_gold_out);
+    }
+
+    return ret;
+}
+
+CdnsTestGold::CdnsTestGold()
+{
+}
+
+CdnsTestGold::~CdnsTestGold()
+{
+}
+
+bool CdnsTestGold::DoTest()
+{
+    CdnsTest* test = new CdnsTest();
+    bool ret = false;
+
+    if (test != NULL) {
+        ret = test->DoTest(gold_in, text_gold_out, text_ref_gold);
         delete test;
     }
 

@@ -179,9 +179,6 @@ bool cdns::open_block(int* err)
     *err = 0;
     if (!preamble_parsed) {
         ret = read_preamble(err);
-        if (is_old_version()) {
-            index_offset = 1;
-        }
     }
 
     if (ret && nb_blocks_read >= nb_blocks_present) {
@@ -378,6 +375,10 @@ bool cdns::read_preamble(int * err)
     }
 
     preamble_parsed = true;
+
+    if (is_old_version()) {
+        index_offset = 1;
+    }
 
     if (in == NULL || !ret) {
         buf_parsed = buf_read;
@@ -1805,7 +1806,7 @@ uint8_t* cdnsBlock::parse_map_item(uint8_t* in, uint8_t const* in_max, int64_t v
         in = cbor_ctx_array_parse(in, in_max, &address_events, err, this);
         break;
     default:
-        in = cbor_skip(in, in_max, err);
+         in = cbor_skip(in, in_max, err);
         break;
     }
 
@@ -2842,6 +2843,10 @@ void cdnsBlockParameter::clear()
 }
 
 cdnsPreamble::cdnsPreamble()
+    :
+    cdns_version_major(0),
+    cdns_version_minor(0),
+    cdns_version_private(0)
 {
 }
 
@@ -2976,6 +2981,13 @@ void cdnsStorageParameter::clear()
 }
 
 cdnsCollectionParameters::cdnsCollectionParameters()
+    :
+    query_timeout(0),
+    skew_timeout(0),
+    snaplen(0),
+    promisc(false),
+    query_options(0),
+    response_options(0)
 {
 }
 
@@ -3021,7 +3033,6 @@ uint8_t* cdnsCollectionParameters::parse_map_item(uint8_t* in, uint8_t const* in
     case 9:
         in = host_id.parse(in, in_max, err);
         break;
-
     default:
         in = cbor_skip(in, in_max, err);
         break;

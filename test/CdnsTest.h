@@ -34,9 +34,20 @@ public:
 
     static void SubmitQuery(cdns* cdns_ctx, size_t query_index, FILE* F);
 
+    static void SubmitPreamble(FILE* F_out, cdns* cdns_ctx);
+    static void SubmitStorageParameter(FILE* F_out, cdnsStorageParameter* storage);
+    static void SubmitCollectionParameters(FILE* F_out, cdnsCollectionParameters* collection);
+
     static bool FileCompare(char const* file_out, char const* file_ref);
 
     bool DoTest(char const* test_in, char const* test_out, char const* test_ref);
+
+    static void  PrintIntVector(FILE* F_out, std::vector<int>* v_int);
+    static void  PrintTextVector(FILE* F_out, std::vector<cbor_text>* v_int);
+    static void  PrintBytesVector(FILE* F_out, std::vector<cbor_bytes>* v_bytes);
+    static void  PrintText(FILE* F_out, cbor_text* p_text);
+    static void  PrintBytes(FILE* F_out, cbor_bytes* p_bytes);
+
 };
 
 class CdnsTestDraft : public cdns_test_class
@@ -47,7 +58,6 @@ public:
 
     bool DoTest() override;
 };
-
 
 class CdnsTestRfc : public cdns_test_class
 {
@@ -72,6 +82,24 @@ class CdnsRfcDumpTest : public cdns_test_class
 public:
     CdnsRfcDumpTest();
     ~CdnsRfcDumpTest();
+
+    bool DoTest() override;
+};
+
+class CdnsGoldDumpTest : public cdns_test_class
+{
+public:
+    CdnsGoldDumpTest();
+    ~CdnsGoldDumpTest();
+
+    bool DoTest() override;
+};
+
+class CdnsTestGold : public cdns_test_class
+{
+public:
+    CdnsTestGold();
+    ~CdnsTestGold();
 
     bool DoTest() override;
 };
