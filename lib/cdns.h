@@ -488,6 +488,8 @@ public:
 
     bool dump(char const* file_out);
 
+    bool read_preamble(int* err); /* Leaves nb_read pointing to the beginning of the 1st block */
+
     bool open_block(int* err);
 
     bool is_first_block() {
@@ -531,8 +533,6 @@ private:
     int64_t nb_blocks_read;
 
     bool load_entire_file();
-    bool read_preamble(int* err); /* Leaves nb_read pointing to the beginning of the 1st block */
-
 
 
     uint8_t* dump_preamble(uint8_t* in, uint8_t* in_max, char* out_buf, char* out_max, int* cdns_version, int* err, FILE* F_out);
