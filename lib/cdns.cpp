@@ -2843,6 +2843,10 @@ void cdnsBlockParameter::clear()
 }
 
 cdnsPreamble::cdnsPreamble()
+    :
+    cdns_version_major(0),
+    cdns_version_minor(0),
+    cdns_version_private(0)
 {
 }
 
