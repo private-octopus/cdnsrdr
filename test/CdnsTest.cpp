@@ -280,10 +280,10 @@ void CdnsTest::SubmitCollectionParameters(FILE* F_out, cdnsCollectionParameters*
         fprintf(F_out, "\n");
     }
     if (collection->query_options != 0) {
-        fprintf(F_out, "        QueryOptions: 0x% " PRIx64 "\n", collection->query_options);
+        fprintf(F_out, "        QueryOptions: 0x%" PRIx64 "\n", collection->query_options);
     }
     if (collection->response_options != 0) {
-        fprintf(F_out, "        ResponseOptions: 0x% " PRIx64 "\n", collection->response_options);
+        fprintf(F_out, "        ResponseOptions: 0x%" PRIx64 "\n", collection->response_options);
     }
     if (collection->generator_id.l > 0) {
         fprintf(F_out, "        GeneratorId: ");
