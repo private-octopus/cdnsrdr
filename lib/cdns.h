@@ -440,7 +440,7 @@ public:
     int64_t skew_timeout;
     int64_t snaplen;
     int64_t promisc;
-    std::vector<cbor_bytes> interfaces;
+    std::vector<cbor_text> interfaces;
     std::vector<cbor_bytes> server_addresses;
     /* std::vector<cbor_bytes> vlan_id; */ /* This is specified by the spec, but does not seem to be actually encoded */
     cbor_text filter;
