@@ -29,7 +29,6 @@
 cdns::cdns():
     first_block_start_us(0),
     index_offset(0),
-    F(NULL),
     buf(NULL),
     buf_size(0),
     buf_read(0),
@@ -45,10 +44,6 @@ cdns::cdns():
 
 cdns::~cdns()
 {
-    if (F != NULL) {
-        fclose(F);
-    }
-    
     if (buf != NULL) {
         delete[] buf;
     }
@@ -77,11 +72,11 @@ bool cdns::open(char const* file_name)
 {
     bool ret = false;
 
-    if (F == NULL && buf == NULL) {
-
-        F = cnds_file_open(file_name, "rb");
+    if (buf == NULL) {
+        FILE * F = cnds_file_open(file_name, "rb");
         if (F != NULL) {
-            ret = load_entire_file();
+            ret = read_entire_file(F);
+            fclose(F);
         }
     }
 
@@ -271,7 +266,7 @@ int cdns::get_edns_flags(int q_dns_flags)
     return (q_dns_flags << 8) & (1<<15);
 }
 
-bool cdns::load_entire_file()
+bool cdns::read_entire_file(FILE * FD)
 {
     bool ret = true;
     do {
@@ -299,7 +294,7 @@ bool cdns::load_entire_file()
         }
         else {
             size_t asked = buf_size - buf_read;
-            size_t n_bytes = fread(buf + buf_read, 1, asked, F);
+            size_t n_bytes = fread(buf + buf_read, 1, asked, FD);
             end_of_file = (n_bytes < asked);
             buf_read += n_bytes;
         }

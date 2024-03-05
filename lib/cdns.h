@@ -486,6 +486,8 @@ public:
 
     bool open(char const* file_name);
 
+    bool read_entire_file(FILE* FD);
+
     bool dump(char const* file_out);
 
     bool read_preamble(int* err); /* Leaves nb_read pointing to the beginning of the 1st block */
@@ -520,7 +522,6 @@ public:
     int index_offset;
 
 private:
-    FILE* F;
     uint8_t* buf;
     size_t buf_size;
     size_t buf_read;
@@ -531,9 +532,6 @@ private:
     bool block_list_undef;
     int64_t nb_blocks_present;
     int64_t nb_blocks_read;
-
-    bool load_entire_file();
-
 
     uint8_t* dump_preamble(uint8_t* in, uint8_t* in_max, char* out_buf, char* out_max, int* cdns_version, int* err, FILE* F_out);
     uint8_t* dump_block_parameters(uint8_t* in, uint8_t* in_max, char* out_buf, char* out_max, int cdns_version, int* err, FILE* F_out);
