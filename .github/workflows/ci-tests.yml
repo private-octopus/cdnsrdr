@@ -32,7 +32,7 @@ jobs:
 
       - name: Perform Unit Tests
         run: |
-            ./cndstest
+            ./cdnstest
 
       - name: Run Valgrind
         run: |
