@@ -522,9 +522,9 @@ public:
     int index_offset;
     uint8_t* buf;
     size_t buf_size;
+    size_t buf_read;
 
 private:
-    size_t buf_read;
     size_t buf_parsed;
     bool end_of_file;
     bool preamble_parsed;
