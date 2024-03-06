@@ -520,10 +520,10 @@ public:
     cdnsBlock block; /* Current block */
     uint64_t first_block_start_us;
     int index_offset;
-
-private:
     uint8_t* buf;
     size_t buf_size;
+
+private:
     size_t buf_read;
     size_t buf_parsed;
     bool end_of_file;
